@@ -6,6 +6,10 @@
 """
 import os
 
+from dotenv import load_dotenv
+
+load_dotenv()
+
 # ---- 交易所选择 ----
 # 支持: "bitget" (默认) / "binance"
 EXCHANGE: str = os.getenv("EXCHANGE", "bitget").lower()
