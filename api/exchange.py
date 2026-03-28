@@ -86,3 +86,41 @@ class ExchangeAPI(ABC):
     @abstractmethod
     def get_contracts(self, symbol: str, product_type: str) -> dict:
         """获取合约信息（价格精度等）"""
+
+    # ---- 带单（Copy Trading） ----
+
+    def copy_get_current_track(self, product_type: str,
+                               symbol: str = "", limit: str = "20",
+                               id_less_than: str = "",
+                               id_greater_than: str = "") -> dict:
+        """获取当前带单列表"""
+        raise NotImplementedError("当前交易所不支持带单功能")
+
+    def copy_get_history_track(self, product_type: str,
+                               symbol: str = "", limit: str = "20",
+                               start_time: str = "",
+                               end_time: str = "",
+                               id_less_than: str = "",
+                               id_greater_than: str = "") -> dict:
+        """获取历史带单列表"""
+        raise NotImplementedError("当前交易所不支持带单功能")
+
+    def copy_close_track(self, tracking_no: str, symbol: str,
+                         product_type: str) -> dict:
+        """交易员平仓带单"""
+        raise NotImplementedError("当前交易所不支持带单功能")
+
+    def copy_modify_tpsl(self, tracking_no: str, symbol: str,
+                         product_type: str,
+                         stop_profit_price: str = "",
+                         stop_loss_price: str = "") -> dict:
+        """修改带单止盈止损"""
+        raise NotImplementedError("当前交易所不支持带单功能")
+
+    def copy_get_symbols(self, product_type: str) -> dict:
+        """获取带单交易对列表"""
+        raise NotImplementedError("当前交易所不支持带单功能")
+
+    def copy_get_profit_summary(self) -> dict:
+        """获取交易员收益汇总"""
+        raise NotImplementedError("当前交易所不支持带单功能")

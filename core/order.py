@@ -10,6 +10,7 @@ from ..api.factory import get_exchange
 from ..infra.config import get_config
 from ..infra.logger import log, notify
 from ..infra.util import get_human_time
+from .copy_trading import close_track_by_symbol, sync_tpsl_to_track
 
 if TYPE_CHECKING:
     from ..models import AccountState
@@ -37,7 +38,12 @@ def close_position(symbol: str, side: str, state: AccountState) -> float:
     :param side: 'long' 平多 / 'short' 平空
     :return: 本次盈亏
     """
+    cfg = get_config()
     ex = get_exchange()
+
+    # 带单模式：先通过带单 API 平仓，确保跟单者同步
+    if cfg.get("copy_trading_enabled", False):
+        close_track_by_symbol(symbol)
     available = state.position[symbol]["available"]
     order_side = "buy" if side == "long" else "sell"
     label = "平多" if side == "long" else "平空"
@@ -140,6 +146,21 @@ def open_position(symbol: str, price: float, cut: dict, side: str,
 
     state.position_type = "BUY" if side == "long" else "SELL"
     state.position_symbol = symbol
+
+    # 带单模式：同步止盈止损到带单订单
+    if cfg.get("copy_trading_enabled", False):
+        tp_str = ""
+        sl_str = ""
+        if cut[cut_key]["profit"] > 0:
+            contracts = ex.get_contracts(symbol, ex.PRODUCT_TYPE)
+            pp = contracts["data"][0]["pricePlace"]
+            if side == "long":
+                tp_str = f"{filled_price * (1 + cut[cut_key]['profit']):.{pp}f}"
+            else:
+                tp_str = f"{filled_price * (1 - cut[cut_key]['profit']):.{pp}f}"
+        if cut[cut_key]["loss"] > 0 and preset_stop_loss:
+            sl_str = preset_stop_loss
+        sync_tpsl_to_track(symbol, tp_str, sl_str)
 
     duration = state.reset_no_position_time()
     notify(f"空仓天数：{_ms_to_days(duration)}")

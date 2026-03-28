@@ -179,3 +179,69 @@ class BitgetClient(ExchangeAPI):
         resp = self._simple_get(
             f"https://{self.HOST}/api/v2/mix/market/contracts?{q}")
         return resp.json()
+
+    # ---- 带单（Copy Trading） ----
+
+    def copy_get_current_track(self, product_type, symbol="",
+                               limit="20", id_less_than="",
+                               id_greater_than="") -> dict:
+        q = f"productType={product_type}"
+        if symbol:
+            q += f"&symbol={symbol}"
+        if limit:
+            q += f"&limit={limit}"
+        if id_less_than:
+            q += f"&idLessThan={id_less_than}"
+        if id_greater_than:
+            q += f"&idGreaterThan={id_greater_than}"
+        return self._get("/api/v2/copy/mix-trader/order-current-track", q)
+
+    def copy_get_history_track(self, product_type, symbol="",
+                               limit="20", start_time="",
+                               end_time="", id_less_than="",
+                               id_greater_than="") -> dict:
+        q = f"productType={product_type}"
+        if symbol:
+            q += f"&symbol={symbol}"
+        if limit:
+            q += f"&limit={limit}"
+        if start_time:
+            q += f"&startTime={start_time}"
+        if end_time:
+            q += f"&endTime={end_time}"
+        if id_less_than:
+            q += f"&idLessThan={id_less_than}"
+        if id_greater_than:
+            q += f"&idGreaterThan={id_greater_than}"
+        return self._get("/api/v2/copy/mix-trader/order-history-track", q)
+
+    def copy_close_track(self, tracking_no, symbol,
+                         product_type) -> dict:
+        return self._post("/api/v2/copy/mix-trader/order-close-track", {
+            "trackingNo": tracking_no,
+            "symbol": symbol,
+            "productType": product_type,
+        })
+
+    def copy_modify_tpsl(self, tracking_no, symbol, product_type,
+                         stop_profit_price="",
+                         stop_loss_price="") -> dict:
+        data = {
+            "trackingNo": tracking_no,
+            "symbol": symbol,
+            "productType": product_type,
+        }
+        if stop_profit_price:
+            data["stopProfitPrice"] = stop_profit_price
+        if stop_loss_price:
+            data["stopLossPrice"] = stop_loss_price
+        return self._post(
+            "/api/v2/copy/mix-trader/order-modify-track-tpsl", data)
+
+    def copy_get_symbols(self, product_type) -> dict:
+        return self._get("/api/v2/copy/mix-trader/config-query-symbols",
+                         f"productType={product_type}")
+
+    def copy_get_profit_summary(self) -> dict:
+        return self._get("/api/v2/copy/mix-trader/config-query-settings",
+                         "")

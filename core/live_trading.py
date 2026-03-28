@@ -32,6 +32,7 @@ from .strategy import (
     is_btc_trend_up, is_btc_trend_down,
 )
 from ..infra.util import get_time_ms
+from .copy_trading import report_copy_trading_status, report_history_summary
 
 # 时间常量（毫秒）
 MS_15M = 15 * 60 * 1000
@@ -308,15 +309,23 @@ def _loop_scan_position(all_position: dict, state: AccountState) -> None:
         now = int(time.time())
         if now % (4 * 3600) <= 60:
             _full_scan_and_order(state, is_four_hour=True)
+            # 带单模式：每 4 小时汇报历史带单收益
+            if get_config().get("copy_trading_enabled", False):
+                report_history_summary()
         elif now % (15 * 60) <= 60:
             _full_scan_and_order(state)
 
 
 def strategy(state: AccountState) -> None:
     """单次策略执行：更新余额 → 检查持仓 → 扫描市场 → 下单"""
+    cfg = get_config()
     ex = get_exchange()
     acc = ex.get_accounts(ex.PRODUCT_TYPE)
     state.update_balance(float(acc["data"][0]["accountEquity"]))
+
+    # 带单模式：汇报当前带单状态
+    if cfg.get("copy_trading_enabled", False):
+        report_copy_trading_status()
 
     all_position = ex.get_all_position(ex.PRODUCT_TYPE)
     if all_position["data"]:
