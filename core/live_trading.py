@@ -259,7 +259,16 @@ def _scan_position(all_position: dict, state: AccountState) -> None:
 
     all_sym: dict = {}
     is_first = state.is_first_scan_position
-    limit = "300" if is_first else "41"
+    if is_first:
+        # 根据最早开仓时间动态计算 15m K线需要多少根，确保覆盖整个持仓周期
+        earliest_ctime = min(int(x["cTime"]) for x in all_position["data"])
+        hold_ms = int(get_time_ms()) - earliest_ctime
+        limit_15m = max(300, int(hold_ms / MS_15M) + 10)
+        limit = str(limit_15m)
+        log.info("首次扫描持仓，最早开仓距今 %.1f 天，15m limit=%s",
+                 hold_ms / MS_1D, limit)
+    else:
+        limit = "41"
     asyncio.run(get_all_data(["1D", "15m", "1m"], all_sym, key_list, limit, state))
     if is_first:
         state.is_first_scan_position = False

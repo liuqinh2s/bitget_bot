@@ -112,22 +112,24 @@ def track_price(all_sym: dict, is_first_scan: bool, state: AccountState) -> None
     for sym in all_sym:
         if is_first_scan:
             c_time = int(state.position[sym]["cTime"])
-            for i in range(1, len(all_sym[sym]["15m"]["data"])):
-                bar = all_sym[sym]["15m"]["data"][-i]
-                if int(bar[0]) > c_time:
-                    high, low = float(bar[2]), float(bar[3])
-                    if sym in state.price_track:
-                        state.price_track[sym]["priceHigh"] = max(
-                            high, state.price_track[sym]["priceHigh"])
-                        state.price_track[sym]["priceLow"] = min(
-                            low, state.price_track[sym]["priceLow"])
-                    else:
-                        state.price_track[sym] = {
-                            "priceHigh": high,
-                            "priceLow": low,
-                            "priceStart": float(all_sym[sym]["15m"]["data"][-1 - i][3]),
-                        }
-                    break
+            high_max = float("-inf")
+            low_min = float("inf")
+            price_start = None
+            for bar in all_sym[sym]["15m"]["data"]:
+                if int(bar[0]) < c_time:
+                    # 记录开仓前最后一根 bar 的收盘价作为 priceStart
+                    price_start = float(bar[3])
+                    continue
+                high_max = max(high_max, float(bar[2]))
+                low_min = min(low_min, float(bar[3]))
+            if high_max > float("-inf"):
+                if price_start is None:
+                    price_start = float(all_sym[sym]["15m"]["data"][0][3])
+                state.price_track[sym] = {
+                    "priceHigh": high_max,
+                    "priceLow": low_min,
+                    "priceStart": price_start,
+                }
 
         bar_1m = all_sym[sym]["1m"]["data"][-1]
         high_1m, low_1m = float(bar_1m[2]), float(bar_1m[3])
