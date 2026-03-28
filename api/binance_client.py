@@ -15,11 +15,11 @@ from urllib.parse import urlencode
 
 import requests
 
-from .exchange import ExchangeAPI
-from .retry import retry
-from ..infra.env import NEED_PROXY, PROXIES
-from ..infra.logger import log, notify
-from ..infra.util import get_time_ms
+from api.exchange import ExchangeAPI
+from api.retry import retry
+from infra.env import NEED_PROXY, PROXIES
+from infra.logger import log, notify
+from infra.util import get_time_ms
 
 
 # Binance 周期映射：项目内部周期名 → Binance interval

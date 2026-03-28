@@ -16,23 +16,23 @@ import asyncio
 import time
 from time import sleep
 
-from ..api.factory import get_exchange
-from ..infra.config import get_config
-from .data_fetcher import get_all_data, compute_indicators
-from ..infra.logger import log, notify
-from ..models import AccountState
-from .order import order
-from .position import cut_profit, track_price
-from .scanner import (
+from api.factory import get_exchange
+from infra.config import get_config
+from core.data_fetcher import get_all_data, compute_indicators
+from infra.logger import log, notify
+from models import AccountState
+from core.order import order
+from core.position import cut_profit, track_price
+from core.scanner import (
     detect_volume_anomaly, select_by_fund_rate, select_by_volume,
     select_by_volume_surge, find_fairy_guide, find_leading_coins,
 )
-from .strategy import (
+from core.strategy import (
     is_15m_trend_up, is_1h_trend_up, is_4h_trend_up, is_1d_trend_up,
     is_btc_trend_up, is_btc_trend_down,
 )
-from ..infra.util import get_time_ms
-from .copy_trading import report_copy_trading_status, report_history_summary
+from infra.util import get_time_ms
+from core.copy_trading import report_copy_trading_status, report_history_summary
 
 # 时间常量（毫秒）
 MS_15M = 15 * 60 * 1000
@@ -360,9 +360,9 @@ def main() -> None:
     interval = cfg.get("scan_interval_minutes", 15) * 60
     state = AccountState()
 
-    from ..infra.env import EXCHANGE
+    from infra.env import EXCHANGE
     log.info("%s 交易机器人启动", EXCHANGE.capitalize())
-    from ..infra.env import BITGET_DEMO
+    from infra.env import BITGET_DEMO
     if EXCHANGE == "bitget" and BITGET_DEMO:
         notify("⚠️ 当前为模拟盘模式（Demo Trading）")
     while True:

@@ -5,7 +5,7 @@ from __future__ import annotations
 
 import logging
 
-from .send_msg import send_telegram
+from infra.send_msg import send_telegram
 
 
 class TelegramHandler(logging.Handler):

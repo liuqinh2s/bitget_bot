@@ -97,7 +97,7 @@ copy_trading_enabled: false   # 带单模式开关
 ### 4. 运行
 
 ```bash
-python3 -m bitget_bot.main
+python3 main.py
 ```
 
 ## 交易所切换

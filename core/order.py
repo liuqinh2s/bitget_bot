@@ -6,14 +6,14 @@ from __future__ import annotations
 from time import sleep
 from typing import TYPE_CHECKING
 
-from ..api.factory import get_exchange
-from ..infra.config import get_config
-from ..infra.logger import log, notify
-from ..infra.util import get_human_time
-from .copy_trading import close_track_by_symbol, sync_tpsl_to_track
+from api.factory import get_exchange
+from infra.config import get_config
+from infra.logger import log, notify
+from infra.util import get_human_time
+from core.copy_trading import close_track_by_symbol, sync_tpsl_to_track
 
 if TYPE_CHECKING:
-    from ..models import AccountState
+    from models import AccountState
 
 
 def _wait_for_filled(symbol: str, order_info: dict) -> dict:

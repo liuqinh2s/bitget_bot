@@ -13,11 +13,11 @@ from typing import Any
 
 import requests
 
-from .exchange import ExchangeAPI
-from .retry import retry
-from ..infra.env import NEED_PROXY, PROXIES, BITGET_DEMO
-from ..infra.logger import log, notify
-from ..infra.util import get_time_ms
+from api.exchange import ExchangeAPI
+from api.retry import retry
+from infra.env import NEED_PROXY, PROXIES, BITGET_DEMO
+from infra.logger import log, notify
+from infra.util import get_time_ms
 
 
 class BitgetClient(ExchangeAPI):

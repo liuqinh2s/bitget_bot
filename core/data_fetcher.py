@@ -10,17 +10,17 @@ from typing import TYPE_CHECKING
 
 import aiohttp
 
-from ..analysis.bollinger_bands import calculate_bollinger_bands
-from ..analysis.ma import moving_average_np
-from ..analysis.macd import calculate_macd
-from ..api.factory import get_exchange
-from ..infra.config import get_config
-from ..infra.env import NEED_PROXY, PROXIES
-from ..infra.logger import log, notify
-from ..infra.util import get_time_ms
+from analysis.bollinger_bands import calculate_bollinger_bands
+from analysis.ma import moving_average_np
+from analysis.macd import calculate_macd
+from api.factory import get_exchange
+from infra.config import get_config
+from infra.env import NEED_PROXY, PROXIES
+from infra.logger import log, notify
+from infra.util import get_time_ms
 
 if TYPE_CHECKING:
-    from ..models import AccountState
+    from models import AccountState
 
 # 时间常量（毫秒）
 MS_1D = 24 * 60 * 60 * 1000
@@ -29,7 +29,7 @@ MS_1D = 24 * 60 * 60 * 1000
 async def _fetch_klines(session: aiohttp.ClientSession, params: dict,
                         semaphore: asyncio.Semaphore) -> list:
     """异步获取单个币种单个周期的 K 线数据，自动翻页"""
-    from ..infra.env import EXCHANGE
+    from infra.env import EXCHANGE
 
     timestamp = int(get_time_ms())
     is_binance = EXCHANGE == "binance"

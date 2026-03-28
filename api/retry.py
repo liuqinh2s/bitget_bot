@@ -7,7 +7,7 @@ import functools
 import time
 from typing import Callable, TypeVar
 
-from ..infra.logger import log
+from infra.logger import log
 
 F = TypeVar("F", bound=Callable)
 

@@ -14,10 +14,10 @@ from typing import Any
 
 import requests
 
-from ..infra.env import NEED_PROXY, PROXIES, API_KEY, API_SECRET, API_PASSPHRASE, BITGET_DEMO
-from ..infra.logger import log, notify
-from .retry import retry
-from ..infra.util import get_time_ms
+from infra.env import NEED_PROXY, PROXIES, API_KEY, API_SECRET, API_PASSPHRASE, BITGET_DEMO
+from infra.logger import log, notify
+from api.retry import retry
+from infra.util import get_time_ms
 
 # ---- 常量 ----
 HOST = "api.bitget.com"

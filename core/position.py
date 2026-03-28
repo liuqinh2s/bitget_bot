@@ -5,12 +5,12 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from ..infra.config import get_config
-from ..infra.logger import log, notify
-from ..infra.util import get_time_ms
+from infra.config import get_config
+from infra.logger import log, notify
+from infra.util import get_time_ms
 
 if TYPE_CHECKING:
-    from ..models import AccountState
+    from models import AccountState
 
 # 时间常量（毫秒）
 MS_1D = 24 * 60 * 60 * 1000

@@ -12,12 +12,12 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from ..api.factory import get_exchange
-from ..infra.config import get_config
-from ..infra.logger import log, notify
+from api.factory import get_exchange
+from infra.config import get_config
+from infra.logger import log, notify
 
 if TYPE_CHECKING:
-    from ..models import AccountState
+    from models import AccountState
 
 
 def get_current_tracks() -> list[dict]:

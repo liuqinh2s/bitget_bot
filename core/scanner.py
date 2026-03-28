@@ -5,10 +5,10 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from ..infra.logger import notify
+from infra.logger import notify
 
 if TYPE_CHECKING:
-    from ..models import AccountState
+    from models import AccountState
 
 
 # =============================================================================
@@ -154,7 +154,7 @@ def batch_detect_volume_anomaly(all_sym: dict, symbols: list[str],
 
 def select_by_fund_rate(state: AccountState) -> None:
     """筛选资金费率有利的币种"""
-    from ..api.factory import get_exchange
+    from api.factory import get_exchange
 
     ex = get_exchange()
     for label, side_list, threshold, cmp in [

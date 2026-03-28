@@ -5,7 +5,7 @@ from __future__ import annotations
 
 import requests
 
-from .env import TELEGRAM_TOKEN, TELEGRAM_CHAT_IDS
+from infra.env import TELEGRAM_TOKEN, TELEGRAM_CHAT_IDS
 
 _URL = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
 

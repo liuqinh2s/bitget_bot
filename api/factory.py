@@ -8,8 +8,8 @@
 """
 from __future__ import annotations
 
-from .exchange import ExchangeAPI
-from ..infra.env import (
+from api.exchange import ExchangeAPI
+from infra.env import (
     EXCHANGE, API_KEY, API_SECRET, API_PASSPHRASE,
     BINANCE_API_KEY, BINANCE_API_SECRET,
 )
@@ -24,10 +24,10 @@ def get_exchange() -> ExchangeAPI:
         return _instance
 
     if EXCHANGE == "binance":
-        from .binance_client import BinanceClient
+        from api.binance_client import BinanceClient
         _instance = BinanceClient(BINANCE_API_KEY, BINANCE_API_SECRET)
     else:
-        from .bitget_client import BitgetClient
+        from api.bitget_client import BitgetClient
         _instance = BitgetClient(API_KEY, API_SECRET, API_PASSPHRASE)
 
     return _instance
