@@ -6,9 +6,7 @@ from __future__ import annotations
 from time import sleep
 from typing import TYPE_CHECKING
 
-from ..api.bitget_api import (
-    PRODUCT_TYPE, liveOrder, getOrderDetail, setLeverage, getContracts,
-)
+from ..api.factory import get_exchange
 from ..infra.config import get_config
 from ..infra.logger import log, notify
 from ..infra.util import get_human_time
@@ -19,9 +17,10 @@ if TYPE_CHECKING:
 
 def _wait_for_filled(symbol: str, order_info: dict) -> dict:
     """市价单等待完全成交，每 5 秒轮询一次"""
+    ex = get_exchange()
     sleep(5)
     for _ in range(60):  # 最多等 5 分钟
-        detail = getOrderDetail(symbol, PRODUCT_TYPE, order_info["data"]["orderId"])
+        detail = ex.get_order_detail(symbol, ex.PRODUCT_TYPE, order_info["data"]["orderId"])
         if detail["data"]["state"] == "filled":
             return detail
         sleep(5)
@@ -38,13 +37,14 @@ def close_position(symbol: str, side: str, state: AccountState) -> float:
     :param side: 'long' 平多 / 'short' 平空
     :return: 本次盈亏
     """
+    ex = get_exchange()
     available = state.position[symbol]["available"]
     order_side = "buy" if side == "long" else "sell"
     label = "平多" if side == "long" else "平空"
     log.info("下单量：%su  %s", available, label)
 
-    order_info = liveOrder(
-        symbol, PRODUCT_TYPE, "isolated", "USDT",
+    order_info = ex.live_order(
+        symbol, ex.PRODUCT_TYPE, "isolated", "USDT",
         order_side, available, "market", "close",
     )
     notify(f"orderInfo: {order_info}")
@@ -83,10 +83,11 @@ def open_position(symbol: str, price: float, cut: dict, side: str,
     开仓通用逻辑
     :param side: 'long' 做多 / 'short' 做空
     """
+    ex = get_exchange()
     cfg = get_config()
     hold_side = "long" if side == "long" else "short"
-    leverage_info = setLeverage(
-        symbol, PRODUCT_TYPE, "USDT", None,
+    leverage_info = ex.set_leverage(
+        symbol, ex.PRODUCT_TYPE, "USDT", None,
         cfg.get("leverage", 10), None, hold_side,
     )
     notify(f"调整杠杆：{leverage_info}")
@@ -101,7 +102,7 @@ def open_position(symbol: str, price: float, cut: dict, side: str,
     # 预设止损
     preset_stop_loss = ""
     if cut[cut_key]["loss"] > 0:
-        contracts = getContracts(symbol, PRODUCT_TYPE)
+        contracts = ex.get_contracts(symbol, ex.PRODUCT_TYPE)
         price_place = contracts["data"][0]["pricePlace"]
         if side == "long":
             sl_price = price * (1 - cut[cut_key]["loss"])
@@ -110,8 +111,8 @@ def open_position(symbol: str, price: float, cut: dict, side: str,
         preset_stop_loss = f"{sl_price:.{price_place}f}"
         notify(f"挂单亏{cut[cut_key]['loss'] * 100}%平仓")
 
-    order_info = liveOrder(
-        symbol, PRODUCT_TYPE, "isolated", "USDT",
+    order_info = ex.live_order(
+        symbol, ex.PRODUCT_TYPE, "isolated", "USDT",
         order_side, position_balance / price, "market", "open",
         "", preset_stop_loss,
     )
@@ -124,14 +125,14 @@ def open_position(symbol: str, price: float, cut: dict, side: str,
 
     # 预设止盈
     if cut[cut_key]["profit"] > 0:
-        contracts = getContracts(symbol, PRODUCT_TYPE)
+        contracts = ex.get_contracts(symbol, ex.PRODUCT_TYPE)
         price_place = contracts["data"][0]["pricePlace"]
         if side == "long":
             tp_price = filled_price * (1 + cut[cut_key]["profit"])
         else:
             tp_price = filled_price * (1 - cut[cut_key]["profit"])
-        tp_info = liveOrder(
-            symbol, PRODUCT_TYPE, "isolated", "USDT",
+        tp_info = ex.live_order(
+            symbol, ex.PRODUCT_TYPE, "isolated", "USDT",
             order_side, base_volume, "limit", "close",
             f"{tp_price:.{price_place}f}",
         )

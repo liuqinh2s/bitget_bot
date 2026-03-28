@@ -1,6 +1,8 @@
 """
 =============================================================================
-Bitget 合约自动化交易机器人（实盘）— 主编排模块
+合约自动化交易机器人（实盘）— 主编排模块
+
+支持交易所：Bitget / Binance（通过 EXCHANGE 环境变量切换）
 
 职责：
     - 初始化 AccountState
@@ -14,9 +16,7 @@ import asyncio
 import time
 from time import sleep
 
-from ..api.bitget_api import (
-    PRODUCT_TYPE, getAllPosition, getAccounts, openCount, getFillHistory,
-)
+from ..api.factory import get_exchange
 from ..infra.config import get_config
 from .data_fetcher import get_all_data, compute_indicators
 from ..infra.logger import log, notify
@@ -88,7 +88,8 @@ def _is_shutdown(state: AccountState) -> bool:
     if state.max_drawdown > cfg.get("max_drawdown_threshold", 0.1):
         return True
     try:
-        fill_history = getFillHistory(PRODUCT_TYPE, int(get_time_ms()) - MS_1D)
+        ex = get_exchange()
+        fill_history = ex.get_fill_history(ex.PRODUCT_TYPE, int(get_time_ms()) - MS_1D)
         burst_count = 0
         fill_list = fill_history.get("data", {}).get("fillList")
         if fill_list:
@@ -115,6 +116,7 @@ def _min_price_7d(sym: dict) -> float:
 def _select_and_order(all_sym: dict, state: AccountState) -> None:
     """根据 buy_list / sell_list 执行下单"""
     cfg = get_config()
+    ex = get_exchange()
     for direction, side_list, order_type in [
         ("buy", state.buy_list, "BUY"),
         ("sell", state.sell_list, "SELL"),
@@ -122,13 +124,13 @@ def _select_and_order(all_sym: dict, state: AccountState) -> None:
         if not side_list:
             continue
 
-        acc = getAccounts(PRODUCT_TYPE)
+        acc = ex.get_accounts(ex.PRODUCT_TYPE)
         state.update_balance(float(acc["data"][0]["accountEquity"]))
 
         for key in side_list:
             cur_price = all_sym[key]["15m"]["data"][-1][4]
-            res = openCount(
-                key, PRODUCT_TYPE, "USDT",
+            res = ex.open_count(
+                key, ex.PRODUCT_TYPE, "USDT",
                 str(state.position_balance), cur_price,
                 str(cfg.get("leverage", 10)),
             )
@@ -144,7 +146,7 @@ def _select_and_order(all_sym: dict, state: AccountState) -> None:
                 "sell": {"profit": 0.05, "loss": 0},
             }
 
-            all_position = getAllPosition(PRODUCT_TYPE)
+            all_position = ex.get_all_position(ex.PRODUCT_TYPE)
             max_long = cfg.get("max_long_positions", 3)
             max_short = cfg.get("max_short_positions", 1)
             max_positions = max_long if order_type == "BUY" else max_short
@@ -152,7 +154,7 @@ def _select_and_order(all_sym: dict, state: AccountState) -> None:
                 order(key, all_sym[key]["15m"]["data"], order_type, state, False, cut)
 
     notify(
-        f"bitget 可以开多的币：{state.buy_list} "
+        f"可以开多的币：{state.buy_list} "
         f"可以开空的币：{state.sell_list}"
     )
 
@@ -174,7 +176,7 @@ def scan_market(state: AccountState, is_four_hour: bool = False) -> dict:
     start_time = int(get_time_ms())
     asyncio.run(get_all_data(["1D", "4H", "1H", "15m"], all_sym, state=state))
     elapsed = (int(get_time_ms()) - start_time) / 1000
-    notify(f"bitget 抓一遍所有币的数据，耗费时间：{elapsed}s")
+    notify(f"抓一遍所有币的数据，耗费时间：{elapsed}s")
 
     compute_indicators(all_sym)
 
@@ -234,9 +236,9 @@ def scan_market(state: AccountState, is_four_hour: bool = False) -> dict:
         "扫描完成，全部交易对：%d 可分析：%d 新币:%s 空数据:%s 数据旧:%s",
         len(all_keys), len(valid_symbols), new_symbols, no_data_symbols, old_data_symbols,
     )
-    notify(f"bitget 扫描完成，全部交易对：{len(all_keys)}")
+    notify(f"扫描完成，全部交易对：{len(all_keys)}")
     notify(
-        f"bitget 可分析：{len(valid_symbols)} 数据旧:{old_data_symbols} "
+        f"可分析：{len(valid_symbols)} 数据旧:{old_data_symbols} "
         f"空数据:{no_data_symbols} 新币:{new_symbols}"
     )
     return all_sym
@@ -294,10 +296,11 @@ def _full_scan_and_order(state: AccountState, is_four_hour: bool = False) -> dic
 
 def _loop_scan_position(all_position: dict, state: AccountState) -> None:
     """持仓期间的循环监控"""
+    ex = get_exchange()
     _scan_position(all_position, state)
     while True:
         _wait_until_next(1)
-        all_position = getAllPosition(PRODUCT_TYPE)
+        all_position = ex.get_all_position(ex.PRODUCT_TYPE)
         if not all_position["data"]:
             break
         _scan_position(all_position, state)
@@ -311,15 +314,16 @@ def _loop_scan_position(all_position: dict, state: AccountState) -> None:
 
 def strategy(state: AccountState) -> None:
     """单次策略执行：更新余额 → 检查持仓 → 扫描市场 → 下单"""
-    acc = getAccounts(PRODUCT_TYPE)
+    ex = get_exchange()
+    acc = ex.get_accounts(ex.PRODUCT_TYPE)
     state.update_balance(float(acc["data"][0]["accountEquity"]))
 
-    all_position = getAllPosition(PRODUCT_TYPE)
+    all_position = ex.get_all_position(ex.PRODUCT_TYPE)
     if all_position["data"]:
         _loop_scan_position(all_position, state)
     else:
         _full_scan_and_order(state)
-        all_position = getAllPosition(PRODUCT_TYPE)
+        all_position = ex.get_all_position(ex.PRODUCT_TYPE)
         if all_position["data"]:
             _loop_scan_position(all_position, state)
 
@@ -347,7 +351,8 @@ def main() -> None:
     interval = cfg.get("scan_interval_minutes", 15) * 60
     state = AccountState()
 
-    log.info("Bitget 交易机器人启动")
+    from ..infra.env import EXCHANGE
+    log.info("%s 交易机器人启动", EXCHANGE.capitalize())
     while True:
         try:
             strategy(state)

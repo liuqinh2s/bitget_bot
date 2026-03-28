@@ -154,8 +154,9 @@ def batch_detect_volume_anomaly(all_sym: dict, symbols: list[str],
 
 def select_by_fund_rate(state: AccountState) -> None:
     """筛选资金费率有利的币种"""
-    from ..api.bitget_api import getHistoryFundRate, PRODUCT_TYPE
+    from ..api.factory import get_exchange
 
+    ex = get_exchange()
     for label, side_list, threshold, cmp in [
         ("上涨趋势+资金费为负", state.buy_list, -0.05, lambda t, th: t < th),
         ("下跌趋势+资金费为正", state.sell_list, 0.05, lambda t, th: t > th),
@@ -164,7 +165,7 @@ def select_by_fund_rate(state: AccountState) -> None:
             continue
         result = []
         for sym in side_list:
-            fund_rate = getHistoryFundRate(sym, PRODUCT_TYPE)
+            fund_rate = ex.get_history_fund_rate(sym, ex.PRODUCT_TYPE)
             total = sum(float(x["fundingRate"]) for x in fund_rate["data"])
             if cmp(total, threshold):
                 result.append(sym)

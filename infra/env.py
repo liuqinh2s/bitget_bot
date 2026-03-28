@@ -6,8 +6,14 @@
 """
 import os
 
+# ---- 交易所选择 ----
+# 支持: "bitget" (默认) / "binance"
+EXCHANGE: str = os.getenv("EXCHANGE", "bitget").lower()
+
 # ---- 代理配置 ----
-NEED_PROXY: bool = os.getenv("BITGET_NEED_PROXY", "false").lower() == "true"
+NEED_PROXY: bool = os.getenv("NEED_PROXY",
+                             os.getenv("BITGET_NEED_PROXY", "false")
+                             ).lower() == "true"
 
 _PROXY_HOST = os.getenv("PROXY_HOST", "127.0.0.1")
 _PROXY_PORT = os.getenv("PROXY_PORT", "7890")
@@ -21,6 +27,10 @@ PROXIES = {
 API_KEY: str = os.getenv("BITGET_API_KEY", "")
 API_SECRET: str = os.getenv("BITGET_API_SECRET", "")
 API_PASSPHRASE: str = os.getenv("BITGET_API_PASSPHRASE", "")
+
+# ---- Binance API 配置 ----
+BINANCE_API_KEY: str = os.getenv("BINANCE_API_KEY", "")
+BINANCE_API_SECRET: str = os.getenv("BINANCE_API_SECRET", "")
 
 # ---- Telegram 配置 ----
 TELEGRAM_TOKEN: str = os.getenv("TELEGRAM_TOKEN", "")

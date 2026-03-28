@@ -13,9 +13,7 @@ import aiohttp
 from ..analysis.bollinger_bands import calculate_bollinger_bands
 from ..analysis.ma import moving_average_np
 from ..analysis.macd import calculate_macd
-from ..api.bitget_api import (
-    HOST, PRODUCT_TYPE, getAllSymbol, getHistoryPosition, getKlinesURL,
-)
+from ..api.factory import get_exchange
 from ..infra.config import get_config
 from ..infra.env import NEED_PROXY, PROXIES
 from ..infra.logger import log, notify
@@ -31,15 +29,19 @@ MS_1D = 24 * 60 * 60 * 1000
 async def _fetch_klines(session: aiohttp.ClientSession, params: dict,
                         semaphore: asyncio.Semaphore) -> list:
     """异步获取单个币种单个周期的 K 线数据，自动翻页"""
+    from ..infra.env import EXCHANGE
+
     timestamp = int(get_time_ms())
+    is_binance = EXCHANGE == "binance"
     async with semaphore:
         data: list = []
+        ex = get_exchange()
         while True:
-            url = getKlinesURL(
+            url = ex.get_klines_url(
                 params["symbol"], params["productType"],
                 params["granularity"], params["limit"], str(timestamp),
             )
-            kline = None
+            kline_raw = None
             for attempt in range(5):
                 try:
                     kwargs: dict = {"timeout": 10}
@@ -47,7 +49,7 @@ async def _fetch_klines(session: aiohttp.ClientSession, params: dict,
                         kwargs["proxy"] = PROXIES["http"]
                     async with session.get(url, **kwargs) as resp:
                         text = await resp.text()
-                    kline = json.loads(text)
+                    kline_raw = json.loads(text)
                     break
                 except (aiohttp.ClientError, asyncio.TimeoutError, OSError) as e:
                     log.warning(
@@ -56,15 +58,27 @@ async def _fetch_klines(session: aiohttp.ClientSession, params: dict,
                     )
                     await asyncio.sleep(2)
 
-            if kline is None:
+            if kline_raw is None:
                 raise ConnectionError(
                     f"K线请求失败: {params['symbol']} {params['granularity']}"
                 )
-            if not kline.get("data"):
+
+            # 统一格式: [timestamp, open, high, low, close, volume, quoteVolume]
+            if is_binance:
+                # Binance 返回: [[ts, o, h, l, c, vol, closeTime, quoteVol, ...]]
+                kline_data = [
+                    [str(k[0]), k[1], k[2], k[3], k[4], k[5], k[7]]
+                    for k in kline_raw
+                ] if isinstance(kline_raw, list) else []
+            else:
+                # Bitget 返回: {"data": [[ts, o, h, l, c, vol, quoteVol]]}
+                kline_data = kline_raw.get("data", [])
+
+            if not kline_data:
                 log.debug("%s %s kline 返回为空", params["symbol"], params["granularity"])
                 return [params["symbol"], params["granularity"], data]
 
-            data = kline["data"] + data
+            data = kline_data + data
             if len(data) >= int(params["limit"]):
                 log.debug(
                     "%s %s data 达到 %s 根",
@@ -72,7 +86,7 @@ async def _fetch_klines(session: aiohttp.ClientSession, params: dict,
                 )
                 return [params["symbol"], params["granularity"], data]
 
-            timestamp = int(kline["data"][0][0]) - 1
+            timestamp = int(data[0][0]) - 1
             log.debug(
                 "%s %s 时间戳回退: %s",
                 params["symbol"], params["granularity"], timestamp,
@@ -114,9 +128,10 @@ async def get_all_data(
         limit = cfg.get("default_kline_limit", "200")
 
     ban_list: list[str] = []
+    ex = get_exchange()
     if not key_list:
-        symbols = getAllSymbol(HOST, PRODUCT_TYPE)
-        history = getHistoryPosition(PRODUCT_TYPE, str(int(get_time_ms()) - 2 * MS_1D))
+        symbols = ex.get_all_symbol(ex.PRODUCT_TYPE)
+        history = ex.get_history_position(ex.PRODUCT_TYPE, str(int(get_time_ms()) - 2 * MS_1D))
         log.debug("48小时内的历史仓位(需要ban掉)：%s", history)
         ban_list = [p["symbol"] for p in history["data"]["list"] if float(p["netProfit"]) < 0]
         notify(f"48小时内的历史仓位(需要ban掉)：{ban_list}")
@@ -135,7 +150,7 @@ async def get_all_data(
         for cycle in cycle_arr:
             url_params.append({
                 "symbol": s["symbol"],
-                "productType": PRODUCT_TYPE,
+                "productType": ex.PRODUCT_TYPE,
                 "granularity": cycle,
                 "limit": limit,
             })
