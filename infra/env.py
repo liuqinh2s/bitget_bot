@@ -28,6 +28,10 @@ API_KEY: str = os.getenv("BITGET_API_KEY", "")
 API_SECRET: str = os.getenv("BITGET_API_SECRET", "")
 API_PASSPHRASE: str = os.getenv("BITGET_API_PASSPHRASE", "")
 
+# ---- Bitget 模拟盘 ----
+# 设为 true 启用模拟盘（需使用模拟盘 API Key）
+BITGET_DEMO: bool = os.getenv("BITGET_DEMO", "false").lower() == "true"
+
 # ---- Binance API 配置 ----
 BINANCE_API_KEY: str = os.getenv("BINANCE_API_KEY", "")
 BINANCE_API_SECRET: str = os.getenv("BINANCE_API_SECRET", "")

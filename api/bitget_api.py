@@ -14,7 +14,7 @@ from typing import Any
 
 import requests
 
-from ..infra.env import NEED_PROXY, PROXIES, API_KEY, API_SECRET, API_PASSPHRASE
+from ..infra.env import NEED_PROXY, PROXIES, API_KEY, API_SECRET, API_PASSPHRASE, BITGET_DEMO
 from ..infra.logger import log, notify
 from .retry import retry
 from ..infra.util import get_time_ms
@@ -25,12 +25,15 @@ PRODUCT_TYPE = "USDT-FUTURES"
 
 # 复用连接的 Session
 _session = requests.Session()
-_session.headers.update({
+_headers = {
     "ACCESS-KEY": API_KEY,
     "ACCESS-PASSPHRASE": API_PASSPHRASE,
     "locale": "zh-CN",
     "Content-Type": "application/json",
-})
+}
+if BITGET_DEMO:
+    _headers["paptrading"] = "1"
+_session.headers.update(_headers)
 if NEED_PROXY:
     _session.proxies.update(PROXIES)
 

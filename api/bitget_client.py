@@ -15,7 +15,7 @@ import requests
 
 from .exchange import ExchangeAPI
 from .retry import retry
-from ..infra.env import NEED_PROXY, PROXIES
+from ..infra.env import NEED_PROXY, PROXIES, BITGET_DEMO
 from ..infra.logger import log, notify
 from ..infra.util import get_time_ms
 
@@ -28,13 +28,17 @@ class BitgetClient(ExchangeAPI):
                  api_passphrase: str) -> None:
         self._api_key = api_key
         self._api_secret = api_secret
+        self._demo = BITGET_DEMO
         self._session = requests.Session()
-        self._session.headers.update({
+        headers = {
             "ACCESS-KEY": api_key,
             "ACCESS-PASSPHRASE": api_passphrase,
             "locale": "zh-CN",
             "Content-Type": "application/json",
-        })
+        }
+        if self._demo:
+            headers["paptrading"] = "1"
+        self._session.headers.update(headers)
         if NEED_PROXY:
             self._session.proxies.update(PROXIES)
 

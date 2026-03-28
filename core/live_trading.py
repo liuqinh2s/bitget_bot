@@ -362,6 +362,9 @@ def main() -> None:
 
     from ..infra.env import EXCHANGE
     log.info("%s 交易机器人启动", EXCHANGE.capitalize())
+    from ..infra.env import BITGET_DEMO
+    if EXCHANGE == "bitget" and BITGET_DEMO:
+        notify("⚠️ 当前为模拟盘模式（Demo Trading）")
     while True:
         try:
             strategy(state)

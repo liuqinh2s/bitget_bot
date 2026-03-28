@@ -1,15 +1,22 @@
-# Bitget 合约自动化交易机器人
+# 合约自动化交易机器人
 
-基于 Bitget 交易所 API 的 USDT 永续合约自动化交易机器人，通过多周期技术指标共振 + 成交量异动检测筛选交易机会，并通过 Telegram 实时推送交易通知。
+多交易所 USDT 永续合约自动化交易机器人，通过多周期技术指标共振 + 成交量异动检测筛选交易机会，支持 Telegram 实时通知。
+
+## 支持功能
+
+- **多交易所** — Bitget / Binance，通过环境变量一键切换
+- **合约带单** — Bitget 交易员带单模式，自动同步开平仓和止盈止损给跟单者
+- **模拟盘** — Bitget 模拟盘交易，用虚拟资金测试策略，零风险验证
+- **多周期策略** — 15m / 1H / 4H / 1D 趋势共振 + BTC 大盘过滤
+- **动态风控** — 阶梯回撤止盈、时间止损、爆仓保护、最大回撤关停
+- **Telegram 通知** — 交易信号、开平仓、带单状态实时推送
 
 ## 项目结构
 
 ```
-bitget_bot/
 ├── main.py                      # 入口文件
-├── __init__.py
 ├── models.py                    # 数据模型（Candle、AccountState）
-├── config.yaml                  # 交易参数配置文件
+├── config.yaml                  # 交易参数配置
 ├── requirements.txt             # Python 依赖
 ├── .env.example                 # 环境变量模板
 ├── core/                        # 核心交易逻辑
@@ -18,43 +25,25 @@ bitget_bot/
 │   ├── scanner.py               #   成交量异动检测、辅助选币
 │   ├── order.py                 #   开仓、平仓、统一下单入口
 │   ├── position.py              #   仓位管理（止盈止损、价格追踪）
+│   ├── copy_trading.py          #   带单管理（状态监控、同步止盈止损）
 │   └── data_fetcher.py          #   异步 K 线获取、技术指标计算
-├── api/                         # API 与网络层
-│   ├── bitget_api.py            #   Bitget REST API 封装
+├── api/                         # 交易所抽象与适配
+│   ├── exchange.py              #   交易所统一抽象接口
+│   ├── bitget_client.py         #   Bitget 适配器（含带单 API）
+│   ├── bitget_api.py            #   Bitget REST API 封装（遗留）
+│   ├── binance_client.py        #   Binance 适配器
+│   ├── factory.py               #   交易所工厂（单例）
 │   └── retry.py                 #   重试装饰器
 ├── analysis/                    # 技术指标计算
 │   ├── bollinger_bands.py       #   布林带
 │   ├── macd.py                  #   MACD
-│   └── ma.py                    #   简单移动平均线
-├── infra/                       # 基础设施
-│   ├── logger.py                #   日志框架（logging + Telegram handler）
-│   ├── config.py                #   配置管理（YAML 加载、热加载）
-│   ├── send_msg.py              #   Telegram 消息推送
-│   ├── env.py                   #   环境配置（API 密钥、代理）
-│   └── util.py                  #   工具函数（时间处理）
-└── README.md
-```
-
-## 策略概述
-
-```
-主循环（每 15 分钟）
-  ├── 拉取全市场 K 线数据（1D / 4H / 1H / 15m）
-  ├── 计算技术指标（布林带、MACD、MA）
-  ├── 筛选交易信号
-  │   ├── 成交量异动检测（15m / 1H / 4H）
-  │   ├── 多周期趋势共振（15m + 1H + 4H + 1D 同时看多）
-  │   ├── BTC 大盘方向过滤
-  │   └── 防追高过滤（布林带宽度、7 日涨幅）
-  ├── 执行下单
-  └── 辅助分析（资金费率、龙头币、仙人指路形态）
-
-持仓监控（每 1 分钟）
-  ├── 价格追踪（记录最高/最低价）
-  └── 动态止盈
-      ├── 阶梯回撤止盈（涨 6%~50% 对应不同回撤容忍度）
-      ├── 时间止损（超 2 天亏损 / 超 3 天盈利不足 6%）
-      └── 布林上轨下弯平仓
+│   └── ma.py                    #   移动平均线
+└── infra/                       # 基础设施
+    ├── logger.py                #   日志（logging + Telegram handler）
+    ├── config.py                #   配置管理（YAML 热加载）
+    ├── send_msg.py              #   Telegram 消息推送
+    ├── env.py                   #   环境配置（API 密钥、代理）
+    └── util.py                  #   工具函数（时间处理）
 ```
 
 ## 快速开始
@@ -67,20 +56,99 @@ pip3 install -r requirements.txt
 
 ### 2. 配置环境变量
 
-复制 `.env.example` 为 `.env`，填入你的 API 密钥：
-
 ```bash
 cp .env.example .env
 ```
 
+编辑 `.env`，填入对应交易所的 API 密钥：
+
+```bash
+# 交易所选择: bitget / binance
+EXCHANGE=bitget
+
+# Bitget API
+BITGET_API_KEY=your_api_key
+BITGET_API_SECRET=your_api_secret
+BITGET_API_PASSPHRASE=your_passphrase
+
+# Bitget 模拟盘（设为 true 启用，需使用模拟盘 API Key）
+BITGET_DEMO=false
+
+# Binance API
+BINANCE_API_KEY=your_binance_api_key
+BINANCE_API_SECRET=your_binance_api_secret
+
+# Telegram 通知
+TELEGRAM_TOKEN=your_bot_token
+TELEGRAM_CHAT_IDS=-123456789
+```
+
 ### 3. 调整交易参数
 
-编辑 `config.yaml` 调整杠杆、止盈档位、ban list 等参数，支持运行时热加载。
+编辑 `config.yaml`，支持运行时热加载：
+
+```yaml
+leverage: 10
+max_long_positions: 3
+max_short_positions: 1
+copy_trading_enabled: false   # 带单模式开关
+```
 
 ### 4. 运行
 
 ```bash
 python3 -m bitget_bot.main
+```
+
+## 交易所切换
+
+通过 `EXCHANGE` 环境变量切换，所有交易逻辑通过统一抽象接口调用，无需改代码：
+
+| 环境变量 | 交易所 | 需要的密钥 |
+|---------|--------|-----------|
+| `EXCHANGE=bitget` | Bitget（默认） | `BITGET_API_KEY` / `SECRET` / `PASSPHRASE` |
+| `EXCHANGE=binance` | Binance | `BINANCE_API_KEY` / `SECRET` |
+
+## Bitget 模拟盘
+
+用虚拟资金在实时行情下测试策略，适合上线前验证：
+
+1. 登录 Bitget → 切换到模拟盘 → 个人中心 → API Key 管理 → 创建模拟盘 API Key
+2. 将模拟盘 Key 填入 `.env` 的 `BITGET_API_KEY` 等字段
+3. 设置 `BITGET_DEMO=true`
+4. 启动后会提示 "⚠️ 当前为模拟盘模式"
+
+## Bitget 合约带单
+
+作为交易员（带单员），机器人下单后 Bitget 自动广播给跟单者。本模块额外保证：
+
+- 策略触发平仓时，通过带单 API 同步平仓，确保跟单者一起平
+- 开仓后自动将止盈止损同步到带单订单
+- 每次策略执行时汇报当前带单状态（跟单人数、持仓详情）
+- 每 4 小时汇报历史带单收益（胜率、盈亏）
+
+启用方式：先在 Bitget 申请成为交易员，然后在 `config.yaml` 中设置 `copy_trading_enabled: true`。
+
+## 策略概述
+
+```
+主循环（每 15 分钟）
+  ├── 拉取全市场 K 线（1D / 4H / 1H / 15m）
+  ├── 计算技术指标（布林带、MACD、MA）
+  ├── 筛选交易信号
+  │   ├── 成交量异动检测（15m / 1H / 4H）
+  │   ├── 多周期趋势共振（15m + 1H + 4H + 1D 同时看多）
+  │   ├── BTC 大盘方向过滤
+  │   └── 防追高（布林带宽度、7 日涨幅）
+  ├── 执行下单
+  └── 辅助分析（资金费率、龙头币、仙人指路形态）
+
+持仓监控（每 1 分钟）
+  ├── 价格追踪（记录最高/最低价）
+  └── 动态止盈
+      ├── 阶梯回撤止盈（涨 6%~50% 对应不同回撤容忍度）
+      ├── 时间止损（超 2 天亏损 / 超 3 天盈利不足 6%）
+      └── 布林上轨下弯平仓
 ```
 
 ## 风控机制
@@ -92,18 +160,3 @@ python3 -m bitget_bot.main
 | 时间止损 | 多仓持仓 > 2 天仍亏损 | 平仓 |
 | 阶梯回撤止盈 | 涨幅 6%~50% | 按档位允许不同回撤幅度 |
 | 布林上轨下弯 | 日线上轨拐头 | 平多仓 |
-| 48h 亏损 ban | 48h 内亏损平仓的币种 | 不再交易该币种 |
-
-## 架构改进
-
-本次重构相比初始版本的主要改进：
-
-1. **AccountState 类** — 替代全局 `account` 字典，状态变更通过方法完成
-2. **模块拆分** — `live_trading.py` 从 ~1300 行拆分为 6 个职责单一的模块
-3. **Candle dataclass** — 结构化 K 线数据模型（`models.py`）
-4. **logging 框架** — 统一日志管理，Telegram 作为 WARNING handler
-5. **配置外部化** — 交易参数移至 `config.yaml`，支持热加载
-6. **异常处理细化** — 捕获具体异常类型，关键路径异常上报
-7. **重试装饰器** — 统一处理网络异常的自动重试
-8. **API 层修复** — `_post()` 不再同时传 `data` 和 `json`，使用 `Session` 复用连接
-9. **requirements.txt** — 依赖声明
