@@ -125,8 +125,13 @@ def is_1d_trend_up(sym: dict) -> bool:
 
 def is_btc_trend_down(all_sym: dict) -> bool:
     """BTC 是否处于短期下跌趋势（多条件 OR）"""
-    btc_1d = all_sym["BTCUSDT"]["1D"]["data"]
-    btc_1h = all_sym["BTCUSDT"]["1H"]["data"]
+    btc = all_sym.get("BTCUSDT")
+    if not btc:
+        return True  # 拿不到 BTC 数据时保守处理，视为下跌
+    btc_1d = btc["1D"]["data"]
+    btc_1h = btc["1H"]["data"]
+    if len(btc_1d) < 7 or len(btc_1h) < 25:
+        return True
     close = float(btc_1d[-1][4])
     return any([
         float(btc_1d[-1][1]) > close * 1.02,
@@ -140,5 +145,8 @@ def is_btc_trend_down(all_sym: dict) -> bool:
 
 def is_btc_trend_up(all_sym: dict) -> bool:
     """BTC 日线收盘价比开盘价高 2% 以上"""
-    bar = all_sym["BTCUSDT"]["1D"]["data"][-1]
+    btc = all_sym.get("BTCUSDT")
+    if not btc or len(btc["1D"]["data"]) == 0:
+        return False  # 拿不到 BTC 数据时保守处理，不开仓
+    bar = btc["1D"]["data"][-1]
     return float(bar[4]) > float(bar[1]) * 1.02
