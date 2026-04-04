@@ -182,6 +182,7 @@ def scan_market(state: AccountState, is_four_hour: bool = False) -> dict:
     compute_indicators(all_sym)
 
     all_keys: list[str] = []
+    trend_up_symbols: list[str] = []
     valid_symbols: list[str] = []
     new_symbols: list[str] = []
     no_data_symbols: list[str] = []
@@ -228,10 +229,16 @@ def scan_market(state: AccountState, is_four_hour: bool = False) -> dict:
         not_above_upper = close_price < sym["1D"]["bolling"]["Upper Band"][-1] * max_upper
         btc_ok = is_btc_trend_up(all_sym)
 
+        if trend_all_up:
+            trend_up_symbols.append(key)
+
         if (trend_all_up and not_overextended and not_above_upper
                 and btc_ok and not _is_rubbish(sym)):
             if anomaly_tf in ("15m", "1H", "4H"):
                 state.buy_list[key] = f"{anomaly_tf}成交量异动 + 所有周期趋势向上"
+
+    if trend_up_symbols:
+        notify(f"多头趋势币({len(trend_up_symbols)})：{', '.join(trend_up_symbols)}")
 
     log.info(
         "扫描完成，全部交易对：%d 可分析：%d 新币:%s 空数据:%s 数据旧:%s",
