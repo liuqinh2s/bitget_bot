@@ -29,7 +29,7 @@ from core.scanner import (
 )
 from core.strategy import (
     is_15m_trend_up, is_1h_trend_up, is_4h_trend_up, is_1d_trend_up,
-    is_btc_trend_up, is_btc_trend_down,
+    is_btc_trend_up, is_btc_trend_down, is_btc_12h_not_down,
 )
 from infra.util import get_time_ms
 from core.copy_trading import report_copy_trading_status, report_history_summary
@@ -226,10 +226,16 @@ def scan_market(state: AccountState, is_four_hour: bool = False) -> dict:
             < sym["1D"]["bolling"]["Lower Band"][-1] * max_boll
         )
         not_above_upper = close_price < sym["1D"]["bolling"]["Upper Band"][-1] * max_upper
-        btc_ok = is_btc_trend_up(all_sym)
+        btc_ok = is_btc_12h_not_down(all_sym)
 
         if trend_all_up:
             trend_up_symbols.append(key)
+            # 调试：趋势共振币逐条件打印
+            log.info(
+                "%s 条件检查: btc_ok=%s not_overextended=%s "
+                "not_above_upper=%s not_rubbish=%s",
+                key, btc_ok, not_overextended, not_above_upper, not _is_rubbish(sym),
+            )
 
         # 四条件组合即可开仓，不再要求成交量异动
         if (trend_all_up and not_overextended and not_above_upper

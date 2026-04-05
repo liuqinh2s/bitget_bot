@@ -150,3 +150,16 @@ def is_btc_trend_up(all_sym: dict) -> bool:
         return False  # 拿不到 BTC 数据时保守处理，不开仓
     bar = btc["1D"]["data"][-1]
     return float(bar[4]) > float(bar[1]) * 1.02
+
+
+def is_btc_12h_not_down(all_sym: dict) -> bool:
+    """BTC 近 12 小时未下跌：当前收盘价 >= 12 小时前收盘价"""
+    btc = all_sym.get("BTCUSDT")
+    if not btc:
+        return False
+    btc_1h = btc.get("1H", {}).get("data") or []
+    if len(btc_1h) < 12:
+        return False
+    cur_close = float(btc_1h[-1][4])
+    close_12h_ago = float(btc_1h[-12][4])
+    return cur_close >= close_12h_ago
