@@ -24,7 +24,7 @@ from models import AccountState
 from core.order import order
 from core.position import cut_profit, track_price
 from core.scanner import (
-    detect_volume_anomaly, select_by_fund_rate, select_by_volume,
+    detect_volume_anomaly, select_by_volume,
     select_by_volume_surge, find_fairy_guide, find_leading_coins,
 )
 from core.strategy import (
@@ -115,7 +115,7 @@ def _min_price_7d(sym: dict) -> float:
 # =============================================================================
 
 def _select_and_order(all_sym: dict, state: AccountState) -> None:
-    """根据 buy_list 执行下单，有成交量异动的币优先"""
+    """根据 buy_list 执行下单，加分项越多优先级越高"""
     cfg = get_config()
     ex = get_exchange()
 
@@ -123,10 +123,11 @@ def _select_and_order(all_sym: dict, state: AccountState) -> None:
         notify("可以开多的币：无")
         return
 
-    # 按成交量异动优先排序：有异动的排前面
+    # 按加分项数量降序排序
     sorted_keys = sorted(
         state.buy_list,
-        key=lambda k: (0 if state.buy_list[k]["anomaly"] else 1),
+        key=lambda k: len(state.buy_list[k]["bonus"]),
+        reverse=True,
     )
 
     acc = ex.get_accounts(ex.PRODUCT_TYPE)
@@ -136,9 +137,12 @@ def _select_and_order(all_sym: dict, state: AccountState) -> None:
         notify(f"⚠️ 账户余额不足: {equity}，跳过下单")
         return
 
-    labels = [f"{k}({'⚡' + state.buy_list[k]['anomaly'] if state.buy_list[k]['anomaly'] else '无异动'})"
-              for k in sorted_keys]
-    notify(f"可以开多的币（按优先级）：{', '.join(labels)}")
+    labels = []
+    for k in sorted_keys:
+        bonus = state.buy_list[k]["bonus"]
+        tag = f"{k}({', '.join(bonus)})" if bonus else f"{k}(无加分)"
+        labels.append(tag)
+    notify(f"可以开多的币（按优先级）：{'; '.join(labels)}")
 
     for key in sorted_keys:
         cur_price = all_sym[key]["15m"]["data"][-1][4]
@@ -241,14 +245,39 @@ def scan_market(state: AccountState, is_four_hour: bool = False) -> dict:
         # 四条件组合即可开仓，不再要求成交量异动
         if (trend_all_up and not_overextended and not_above_upper
                 and btc_ok and not _is_rubbish(sym)):
-            state.buy_list[key] = {"reason": "BTC看多 + 趋势共振 + 波动充足 + 未追高", "anomaly": ""}
+            state.buy_list[key] = {"reason": "趋势共振 + 波动充足 + 未追高", "bonus": []}
 
-        # 成交量异动检测，有异动的币标记优先级
+        # 成交量异动检测，有异动的币标记加分
         anomaly_tf = detect_volume_anomaly(all_sym, key, "buy", volume_anomaly)
         if anomaly_tf:
             notify(f"🔔 {key} 出现 {anomaly_tf} 成交量异动")
             if key in state.buy_list:
-                state.buy_list[key]["anomaly"] = anomaly_tf
+                state.buy_list[key]["bonus"].append(f"成交量异动({anomaly_tf})")
+
+    # ---- 对 buy_list 候选币做加分项检测 ----
+    if state.buy_list:
+        # 龙头币
+        leading = set(find_leading_coins(all_sym))
+        for key in state.buy_list:
+            if key in leading:
+                state.buy_list[key]["bonus"].append("龙头币")
+
+        # 仙人指路
+        fairy = set(find_fairy_guide(all_sym, state))
+        for key in state.buy_list:
+            if key in fairy:
+                state.buy_list[key]["bonus"].append("仙人指路")
+
+        # 负资金费率
+        ex = get_exchange()
+        for key in state.buy_list:
+            try:
+                fund_rate = ex.get_history_fund_rate(key, ex.PRODUCT_TYPE)
+                total = sum(float(x["fundingRate"]) for x in fund_rate["data"])
+                if total < -0.05:
+                    state.buy_list[key]["bonus"].append(f"负费率({total*100:.2f}%)")
+            except Exception as e:
+                log.warning("获取 %s 资金费率异常: %s", key, e)
 
     if trend_up_symbols:
         notify(f"多头趋势币({len(trend_up_symbols)})：{', '.join(trend_up_symbols)}")
@@ -309,9 +338,6 @@ def _full_scan_and_order(state: AccountState, is_four_hour: bool = False) -> dic
     _select_and_order(all_sym, state)
     select_by_volume(all_sym, state)
     select_by_volume_surge(all_sym, state)
-    select_by_fund_rate(state)
-    find_fairy_guide(all_sym, state)
-    find_leading_coins(all_sym)
     return all_sym
 
 
