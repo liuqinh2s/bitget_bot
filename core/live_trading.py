@@ -211,8 +211,7 @@ def scan_market(state: AccountState, is_four_hour: bool = False) -> dict:
 
         valid_symbols.append(key)
 
-        # ---- 策略：成交量异动 + 多周期趋势向上 ----
-        anomaly_tf = detect_volume_anomaly(all_sym, key, "buy", volume_anomaly)
+        # ---- 策略：BTC大盘方向 + 多周期趋势共振 + 波动充足 + 未追高 ----
         trend_all_up = (
             is_15m_trend_up(sym, "15m")
             and is_1h_trend_up(sym, "1H")
@@ -232,10 +231,15 @@ def scan_market(state: AccountState, is_four_hour: bool = False) -> dict:
         if trend_all_up:
             trend_up_symbols.append(key)
 
+        # 四条件组合即可开仓，不再要求成交量异动
         if (trend_all_up and not_overextended and not_above_upper
                 and btc_ok and not _is_rubbish(sym)):
-            if anomaly_tf in ("15m", "1H", "4H"):
-                state.buy_list[key] = f"{anomaly_tf}成交量异动 + 所有周期趋势向上"
+            state.buy_list[key] = "BTC看多 + 趋势共振 + 波动充足 + 未追高"
+
+        # 成交量异动仍然检测，仅用于通知，不作为开仓必要条件
+        anomaly_tf = detect_volume_anomaly(all_sym, key, "buy", volume_anomaly)
+        if anomaly_tf:
+            notify(f"🔔 {key} 出现 {anomaly_tf} 成交量异动")
 
     if trend_up_symbols:
         notify(f"多头趋势币({len(trend_up_symbols)})：{', '.join(trend_up_symbols)}")
