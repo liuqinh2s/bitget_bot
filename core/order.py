@@ -48,7 +48,7 @@ def close_position(symbol: str, state: AccountState) -> float:
 
     order_info = ex.live_order(
         symbol, ex.PRODUCT_TYPE, "isolated", "USDT",
-        "sell", available, "market", "close",
+        "buy", available, "market", "close",
     )
     notify(f"orderInfo: {order_info}")
     detail = _wait_for_filled(symbol, order_info)

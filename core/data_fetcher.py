@@ -131,15 +131,24 @@ async def get_all_data(
     ex = get_exchange()
     if not key_list:
         symbols = ex.get_all_symbol(ex.PRODUCT_TYPE)
+
+        # 48小时内亏损的币不再开仓
         history = ex.get_history_position(ex.PRODUCT_TYPE, str(int(get_time_ms()) - 2 * MS_1D))
         log.debug("48小时内的历史仓位(需要ban掉)：%s", history)
-        ban_list = [p["symbol"] for p in history["data"]["list"] if float(p["netProfit"]) < 0]
-        notify(f"48小时内的历史仓位(需要ban掉)：{ban_list}")
+        loss_ban = [p["symbol"] for p in history["data"]["list"] if float(p["netProfit"]) < 0]
+        notify(f"48小时内亏损的币(ban)：{loss_ban}")
+
+        # 12小时内平过仓的币进入冷却期
+        MS_12H = 12 * 60 * 60 * 1000
+        history_12h = ex.get_history_position(ex.PRODUCT_TYPE, str(int(get_time_ms()) - MS_12H))
+        cooldown_ban = [p["symbol"] for p in history_12h["data"]["list"]]
+        if cooldown_ban:
+            notify(f"12小时内平仓冷却(ban)：{cooldown_ban}")
 
         position_keys = list(state.position.keys()) if state else []
         ban_stock = cfg.get("ban_stock_list", [])
         ban_stable = cfg.get("ban_stable_list", [])
-        ban_list = position_keys + ban_stock + ban_stable + ban_list
+        ban_list = position_keys + ban_stock + ban_stable + loss_ban + cooldown_ban
     else:
         symbols = {"data": [{"symbol": key} for key in key_list]}
 

@@ -63,6 +63,8 @@ class BitgetClient(ExchangeAPI):
         headers = self._sign("GET", path, "?" + query_str)
         url = f"https://{self.HOST}{path}?{query_str}"
         resp = self._session.get(url, headers=headers)
+        if resp.status_code != 200:
+            log.error("GET %s 返回 %d: %s", path, resp.status_code, resp.text)
         resp.raise_for_status()
         return resp.json()
 
@@ -73,6 +75,8 @@ class BitgetClient(ExchangeAPI):
         headers = self._sign("POST", path, "", body)
         url = f"https://{self.HOST}{path}"
         resp = self._session.post(url, json=data, headers=headers)
+        if resp.status_code != 200:
+            log.error("POST %s 返回 %d: %s", path, resp.status_code, resp.text)
         resp.raise_for_status()
         return resp.json()
 
