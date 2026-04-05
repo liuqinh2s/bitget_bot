@@ -226,7 +226,7 @@ def scan_market(state: AccountState, is_four_hour: bool = False) -> dict:
             < sym["1D"]["bolling"]["Lower Band"][-1] * max_boll
         )
         not_above_upper = close_price < sym["1D"]["bolling"]["Upper Band"][-1] * max_upper
-        btc_ok = is_btc_12h_not_down(all_sym)
+        btc_ok = True  # TODO: 测试完恢复为 is_btc_12h_not_down(all_sym)
 
         if trend_all_up:
             trend_up_symbols.append(key)
