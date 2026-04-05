@@ -159,7 +159,6 @@ def select_by_fund_rate(state: AccountState) -> None:
     ex = get_exchange()
     for label, side_list, threshold, cmp in [
         ("上涨趋势+资金费为负", state.buy_list, -0.05, lambda t, th: t < th),
-        ("下跌趋势+资金费为正", state.sell_list, 0.05, lambda t, th: t > th),
     ]:
         if not side_list:
             continue
@@ -181,13 +180,6 @@ def select_by_volume(all_sym: dict, state: AccountState) -> None:
                 and float(all_sym[sym]["1D"]["data"][-1][6]) < 6_000_000)
         ]
         notify(f"小成交量+不错的涨幅：{result}")
-    elif state.sell_list:
-        result = [
-            sym for sym in state.sell_list
-            if (float(all_sym[sym]["1D"]["data"][-1][3]) > float(all_sym[sym]["1D"]["data"][-1][1]) * 0.8
-                and float(all_sym[sym]["1D"]["data"][-1][6]) < 6_000_000)
-        ]
-        notify(f"小成交量+不错的跌幅：{result}")
 
 
 def select_by_volume_surge(all_sym: dict, state: AccountState) -> None:

@@ -53,7 +53,7 @@ class AccountState:
         # 持仓
         self.position: dict[str, Any] = {}
         self.position_symbol: str = ""
-        self.position_type: str = ""  # "BUY" | "SELL" | ""
+        self.position_type: str = ""  # "BUY" | ""
         self.position_price: float = 0.0
 
         # 盈亏统计
@@ -61,22 +61,15 @@ class AccountState:
         self.long_loss_count: int = 0
         self.long_profit: float = 0.0
         self.long_loss: float = 0.0
-        self.short_profit_count: int = 0
-        self.short_loss_count: int = 0
-        self.short_profit: float = 0.0
-        self.short_loss: float = 0.0
 
         # 持仓时间统计（毫秒）
         self.no_position_time: int = 0
         self.all_no_position_time: int = 0
         self.long_position_time: int = 0
         self.all_long_position_time: int = 0
-        self.short_position_time: int = 0
-        self.all_short_position_time: int = 0
 
         # 选币结果
         self.buy_list: dict[str, str] = {}
-        self.sell_list: dict[str, str] = {}
 
         # 风控
         self.price_track: dict[str, dict] = {}
@@ -103,30 +96,17 @@ class AccountState:
     def record_profit(self, profit: float, order_type: str) -> None:
         """记录盈亏统计"""
         if profit > 0:
-            if order_type == "BUY":
-                self.short_profit_count += 1
-                self.short_profit += profit
-            else:
-                self.long_profit_count += 1
-                self.long_profit += profit
+            self.long_profit_count += 1
+            self.long_profit += profit
         elif profit < 0:
-            if order_type == "BUY":
-                self.short_loss_count += 1
-                self.short_loss += profit
-            else:
-                self.long_loss_count += 1
-                self.long_loss += profit
+            self.long_loss_count += 1
+            self.long_loss += profit
 
-    def reset_position_time(self, side: str) -> int:
+    def reset_position_time(self) -> int:
         """重置持仓时间，返回本次持仓时长"""
-        if side == "long":
-            duration = self.long_position_time
-            self.all_long_position_time += duration
-            self.long_position_time = 0
-        else:
-            duration = self.short_position_time
-            self.all_short_position_time += duration
-            self.short_position_time = 0
+        duration = self.long_position_time
+        self.all_long_position_time += duration
+        self.long_position_time = 0
         return duration
 
     def reset_no_position_time(self) -> int:

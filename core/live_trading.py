@@ -115,49 +115,51 @@ def _min_price_7d(sym: dict) -> float:
 # =============================================================================
 
 def _select_and_order(all_sym: dict, state: AccountState) -> None:
-    """根据 buy_list / sell_list 执行下单"""
+    """根据 buy_list 执行下单，有成交量异动的币优先"""
     cfg = get_config()
     ex = get_exchange()
-    for direction, side_list, order_type in [
-        ("buy", state.buy_list, "BUY"),
-        ("sell", state.sell_list, "SELL"),
-    ]:
-        if not side_list:
+
+    if not state.buy_list:
+        notify("可以开多的币：无")
+        return
+
+    # 按成交量异动优先排序：有异动的排前面
+    sorted_keys = sorted(
+        state.buy_list,
+        key=lambda k: (0 if state.buy_list[k]["anomaly"] else 1),
+    )
+
+    acc = ex.get_accounts(ex.PRODUCT_TYPE)
+    equity = float(acc["data"][0]["accountEquity"])
+    state.update_balance(equity)
+    if state.position_balance <= 0:
+        notify(f"⚠️ 账户余额不足: {equity}，跳过下单")
+        return
+
+    labels = [f"{k}({'⚡' + state.buy_list[k]['anomaly'] if state.buy_list[k]['anomaly'] else '无异动'})"
+              for k in sorted_keys]
+    notify(f"可以开多的币（按优先级）：{', '.join(labels)}")
+
+    for key in sorted_keys:
+        cur_price = all_sym[key]["15m"]["data"][-1][4]
+        res = ex.open_count(
+            key, ex.PRODUCT_TYPE, "USDT",
+            str(state.position_balance), cur_price,
+            str(cfg.get("leverage", 10)),
+        )
+        notify(f"币种：{key} 可开数量：{res['data']['size']}")
+
+        min_size = state.position_balance * 0.1 / float(cur_price)
+        if float(res["data"]["size"]) / 2 < min_size:
+            notify("可开数量不足")
             continue
 
-        acc = ex.get_accounts(ex.PRODUCT_TYPE)
-        state.update_balance(float(acc["data"][0]["accountEquity"]))
-
-        for key in side_list:
-            cur_price = all_sym[key]["15m"]["data"][-1][4]
-            res = ex.open_count(
-                key, ex.PRODUCT_TYPE, "USDT",
-                str(state.position_balance), cur_price,
-                str(cfg.get("leverage", 10)),
-            )
-            notify(f"币种：{key} 可开数量：{res['data']['size']}")
-
-            min_size = state.position_balance * 0.1 / float(cur_price)
-            if float(res["data"]["size"]) / 2 < min_size:
-                notify("可开数量不足")
-                continue
-
-            cut = None if order_type == "BUY" else {
-                "buy": {"profit": 0, "loss": 0},
-                "sell": {"profit": 0.05, "loss": 0},
-            }
-
-            all_position = ex.get_all_position(ex.PRODUCT_TYPE)
-            max_long = cfg.get("max_long_positions", 3)
-            max_short = cfg.get("max_short_positions", 1)
-            max_positions = max_long if order_type == "BUY" else max_short
-            if len(all_position["data"]) < max_positions:
-                order(key, all_sym[key]["15m"]["data"], order_type, state, False, cut)
-
-    notify(
-        f"可以开多的币：{state.buy_list} "
-        f"可以开空的币：{state.sell_list}"
-    )
+        all_position = ex.get_all_position(ex.PRODUCT_TYPE)
+        max_positions = cfg.get("max_long_positions", 3)
+        if len(all_position["data"]) >= max_positions:
+            notify(f"已达最大持仓数 {max_positions}，停止开仓")
+            break
+        order(key, all_sym[key]["15m"]["data"], "BUY", state)
 
 
 # =============================================================================
@@ -171,7 +173,6 @@ def scan_market(state: AccountState, is_four_hour: bool = False) -> dict:
     """
     cfg = get_config()
     state.buy_list = {}
-    state.sell_list = {}
     all_sym: dict = {}
 
     start_time = int(get_time_ms())
@@ -240,12 +241,14 @@ def scan_market(state: AccountState, is_four_hour: bool = False) -> dict:
         # 四条件组合即可开仓，不再要求成交量异动
         if (trend_all_up and not_overextended and not_above_upper
                 and btc_ok and not _is_rubbish(sym)):
-            state.buy_list[key] = "BTC看多 + 趋势共振 + 波动充足 + 未追高"
+            state.buy_list[key] = {"reason": "BTC看多 + 趋势共振 + 波动充足 + 未追高", "anomaly": ""}
 
-        # 成交量异动仍然检测，仅用于通知，不作为开仓必要条件
+        # 成交量异动检测，有异动的币标记优先级
         anomaly_tf = detect_volume_anomaly(all_sym, key, "buy", volume_anomaly)
         if anomaly_tf:
             notify(f"🔔 {key} 出现 {anomaly_tf} 成交量异动")
+            if key in state.buy_list:
+                state.buy_list[key]["anomaly"] = anomaly_tf
 
     if trend_up_symbols:
         notify(f"多头趋势币({len(trend_up_symbols)})：{', '.join(trend_up_symbols)}")
@@ -353,13 +356,11 @@ def strategy(state: AccountState) -> None:
         if all_position["data"]:
             _loop_scan_position(all_position, state)
 
-    # 更新持仓 / 空仓时间
+    # 更新空仓时间
     if not all_position["data"]:
         state.no_position_time += MS_15M
-    elif state.position_type == "BUY":
+    else:
         state.long_position_time += MS_15M
-    elif state.position_type == "SELL":
-        state.short_position_time += MS_15M
 
 
 def _wait_until_next(minutes: int) -> None:
