@@ -186,16 +186,17 @@ def compute_indicators(all_sym: dict) -> None:
                 closes = [float(x[4]) for x in data]
                 all_sym[symbol][cycle]["bolling"] = calculate_bollinger_bands(closes)
                 all_sym[symbol][cycle]["macd"] = calculate_macd(closes)
-                all_sym[symbol][cycle]["rsi"] = calculate_rsi(closes)
                 for period in ma_periods:
                     all_sym[symbol][cycle][f"ma{period}"] = moving_average_np(closes, period)
 
-                # 成交量震荡率（EMA12/EMA26 差值百分比）
-                volumes = pd.Series([float(x[5]) for x in data])
-                if len(volumes) >= 26:
-                    ema12 = calculate_ema(volumes, 12)
-                    ema26 = calculate_ema(volumes, 26)
-                    vol_osc = ((ema12 - ema26) / ema26 * 100).values.tolist()
-                    all_sym[symbol][cycle]["volume_osc"] = vol_osc
+                # RSI 和成交量震荡率只在 1H 周期计算（盘整放量突破策略用）
+                if cycle == "1H":
+                    all_sym[symbol][cycle]["rsi"] = calculate_rsi(closes)
+                    volumes = pd.Series([float(x[5]) for x in data])
+                    if len(volumes) >= 26:
+                        ema12 = calculate_ema(volumes, 12)
+                        ema26 = calculate_ema(volumes, 26)
+                        vol_osc = ((ema12 - ema26) / ema26 * 100).values.tolist()
+                        all_sym[symbol][cycle]["volume_osc"] = vol_osc
             except (KeyError, IndexError, ValueError) as e:
                 log.warning("指标计算异常 %s %s: %s", symbol, cycle, e)
