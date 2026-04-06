@@ -158,11 +158,8 @@ def _select_and_order(all_sym: dict, state: AccountState) -> None:
             notify("可开数量不足")
             continue
 
-        all_position = ex.get_all_position(ex.PRODUCT_TYPE)
-        # 同步服务器持仓到内存（开仓前做一次校准）
-        state.position = {x["symbol"]: x for x in all_position["data"]}
         max_positions = cfg.get("max_long_positions", 3)
-        if len(all_position["data"]) >= max_positions:
+        if len(state.position) >= max_positions:
             notify(f"已达最大持仓数 {max_positions}，停止开仓")
             break
         order(key, all_sym[key]["15m"]["data"], "BUY", state)
@@ -178,6 +175,11 @@ def scan_market(state: AccountState, is_four_hour: bool = False) -> dict:
     核心策略：成交量异动 + 多周期趋势共振
     """
     cfg = get_config()
+
+    # 每次全市场扫描前，从服务器同步一次持仓到内存
+    ex = get_exchange()
+    all_position = ex.get_all_position(ex.PRODUCT_TYPE)
+    state.position = {x["symbol"]: x for x in all_position["data"]}
     state.buy_list = {}
     all_sym: dict = {}
 
@@ -233,7 +235,7 @@ def scan_market(state: AccountState, is_four_hour: bool = False) -> dict:
             < sym["1D"]["bolling"]["Lower Band"][-1] * max_boll
         )
         not_above_upper = close_price < sym["1D"]["bolling"]["Upper Band"][-1] * max_upper
-        btc_ok = True  # TODO: 测试完恢复为 is_btc_12h_not_down(all_sym)
+        btc_ok = is_btc_12h_not_down(all_sym)
 
         if trend_all_up:
             trend_up_symbols.append(key)
@@ -368,11 +370,6 @@ def strategy(state: AccountState) -> None:
     # 带单模式：汇报当前带单状态
     if cfg.get("copy_trading_enabled", False):
         report_copy_trading_status()
-
-    # 仅在初始化时从服务器拉取持仓，写入内存
-    if state.is_first_scan_position:
-        all_position = ex.get_all_position(ex.PRODUCT_TYPE)
-        state.position = {x["symbol"]: x for x in all_position["data"]}
 
     if state.position:
         _loop_scan_position(state)
