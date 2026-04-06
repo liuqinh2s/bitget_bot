@@ -62,6 +62,10 @@ def close_position(symbol: str, state: AccountState) -> float:
         f"手续费:{detail['data']['fee']} 盈亏: {profit}"
     )
 
+    # 从内存中移除已平仓位
+    state.position.pop(symbol, None)
+    state.price_track.pop(symbol, None)
+
     state.update_drawdown(profit)
     state.position_type = ""
 
@@ -100,6 +104,15 @@ def open_position(symbol: str, price: float, state: AccountState) -> None:
     notify(f"orderDetail: {detail}")
 
     filled_price = float(detail["data"]["priceAvg"])
+
+    # 写入内存持仓，避免再次从服务器拉取
+    state.position[symbol] = {
+        "symbol": symbol,
+        "holdSide": "long",
+        "openPriceAvg": detail["data"]["priceAvg"],
+        "available": detail["data"]["baseVolume"],
+        "cTime": detail["data"]["cTime"],
+    }
 
     state.position_type = "BUY"
     state.position_symbol = symbol

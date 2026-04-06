@@ -159,6 +159,8 @@ def _select_and_order(all_sym: dict, state: AccountState) -> None:
             continue
 
         all_position = ex.get_all_position(ex.PRODUCT_TYPE)
+        # 同步服务器持仓到内存（开仓前做一次校准）
+        state.position = {x["symbol"]: x for x in all_position["data"]}
         max_positions = cfg.get("max_long_positions", 3)
         if len(all_position["data"]) >= max_positions:
             notify(f"已达最大持仓数 {max_positions}，停止开仓")
@@ -298,13 +300,9 @@ def scan_market(state: AccountState, is_four_hour: bool = False) -> dict:
 #  仓位扫描与主循环
 # =============================================================================
 
-def _scan_position(all_position: dict, state: AccountState) -> None:
-    """扫描当前持仓，获取数据并执行止盈逻辑"""
-    key_list = []
-    state.position = {}
-    for x in all_position["data"]:
-        state.position[x["symbol"]] = x
-        key_list.append(x["symbol"])
+def _scan_position(state: AccountState) -> None:
+    """扫描当前持仓（基于内存），获取数据并执行止盈逻辑"""
+    key_list = list(state.position.keys())
 
     if not key_list:
         return
@@ -313,7 +311,7 @@ def _scan_position(all_position: dict, state: AccountState) -> None:
     is_first = state.is_first_scan_position
     if is_first:
         # 根据最早开仓时间动态计算 15m K线需要多少根，确保覆盖整个持仓周期
-        earliest_ctime = min(int(x["cTime"]) for x in all_position["data"])
+        earliest_ctime = min(int(x["cTime"]) for x in state.position.values())
         hold_ms = int(get_time_ms()) - earliest_ctime
         limit_15m = max(300, int(hold_ms / MS_15M) + 10)
         limit = str(limit_15m)
@@ -341,16 +339,14 @@ def _full_scan_and_order(state: AccountState, is_four_hour: bool = False) -> dic
     return all_sym
 
 
-def _loop_scan_position(all_position: dict, state: AccountState) -> None:
-    """持仓期间的循环监控"""
-    ex = get_exchange()
-    _scan_position(all_position, state)
+def _loop_scan_position(state: AccountState) -> None:
+    """持仓期间的循环监控，使用内存中的持仓数据，不再轮询 API"""
+    _scan_position(state)
     while True:
         _wait_until_next(1)
-        all_position = ex.get_all_position(ex.PRODUCT_TYPE)
-        if not all_position["data"]:
+        if not state.position:
             break
-        _scan_position(all_position, state)
+        _scan_position(state)
 
         now = int(time.time())
         if now % (4 * 3600) <= 60:
@@ -373,17 +369,20 @@ def strategy(state: AccountState) -> None:
     if cfg.get("copy_trading_enabled", False):
         report_copy_trading_status()
 
-    all_position = ex.get_all_position(ex.PRODUCT_TYPE)
-    if all_position["data"]:
-        _loop_scan_position(all_position, state)
+    # 仅在初始化时从服务器拉取持仓，写入内存
+    if state.is_first_scan_position:
+        all_position = ex.get_all_position(ex.PRODUCT_TYPE)
+        state.position = {x["symbol"]: x for x in all_position["data"]}
+
+    if state.position:
+        _loop_scan_position(state)
     else:
         _full_scan_and_order(state)
-        all_position = ex.get_all_position(ex.PRODUCT_TYPE)
-        if all_position["data"]:
-            _loop_scan_position(all_position, state)
+        if state.position:
+            _loop_scan_position(state)
 
     # 更新空仓时间
-    if not all_position["data"]:
+    if not state.position:
         state.no_position_time += MS_15M
     else:
         state.long_position_time += MS_15M
