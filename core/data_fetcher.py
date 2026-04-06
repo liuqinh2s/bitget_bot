@@ -9,10 +9,12 @@ import time
 from typing import TYPE_CHECKING
 
 import aiohttp
+import pandas as pd
 
 from analysis.bollinger_bands import calculate_bollinger_bands
 from analysis.ma import moving_average_np
-from analysis.macd import calculate_macd
+from analysis.macd import calculate_macd, calculate_ema
+from analysis.rsi import calculate_rsi
 from api.factory import get_exchange
 from infra.config import get_config
 from infra.env import NEED_PROXY, PROXIES
@@ -174,16 +176,26 @@ async def get_all_data(
 
 
 def compute_indicators(all_sym: dict) -> None:
-    """为所有币种的所有周期计算技术指标（布林带、MACD、均线）"""
+    """为所有币种的所有周期计算技术指标（布林带、MACD、均线、RSI、成交量震荡率）"""
     cfg = get_config()
-    ma_periods = cfg.get("ma_periods", [5, 10, 15, 20, 30, 40, 80, 160])
+    ma_periods = cfg.get("ma_periods", [5, 10, 15, 20, 30, 40, 60, 80, 120, 160, 200])
     for symbol in all_sym:
         for cycle in all_sym[symbol]:
             try:
-                closes = [float(x[4]) for x in all_sym[symbol][cycle]["data"]]
+                data = all_sym[symbol][cycle]["data"]
+                closes = [float(x[4]) for x in data]
                 all_sym[symbol][cycle]["bolling"] = calculate_bollinger_bands(closes)
                 all_sym[symbol][cycle]["macd"] = calculate_macd(closes)
+                all_sym[symbol][cycle]["rsi"] = calculate_rsi(closes)
                 for period in ma_periods:
                     all_sym[symbol][cycle][f"ma{period}"] = moving_average_np(closes, period)
+
+                # 成交量震荡率（EMA12/EMA26 差值百分比）
+                volumes = pd.Series([float(x[5]) for x in data])
+                if len(volumes) >= 26:
+                    ema12 = calculate_ema(volumes, 12)
+                    ema26 = calculate_ema(volumes, 26)
+                    vol_osc = ((ema12 - ema26) / ema26 * 100).values.tolist()
+                    all_sym[symbol][cycle]["volume_osc"] = vol_osc
             except (KeyError, IndexError, ValueError) as e:
                 log.warning("指标计算异常 %s %s: %s", symbol, cycle, e)

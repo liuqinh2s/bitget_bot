@@ -26,6 +26,7 @@ from core.position import cut_profit, track_price
 from core.scanner import (
     detect_volume_anomaly, select_by_volume,
     select_by_volume_surge, find_fairy_guide, find_leading_coins,
+    detect_consolidation_breakout,
 )
 from core.strategy import (
     is_15m_trend_up, is_1h_trend_up, is_4h_trend_up, is_1d_trend_up,
@@ -123,12 +124,24 @@ def _select_and_order(all_sym: dict, state: AccountState) -> None:
         notify("可以开多的币：无")
         return
 
-    # 按加分项数量降序排序
+    # 按加分项数量降序排序，过滤掉没有加分项的币
     sorted_keys = sorted(
-        state.buy_list,
+        [k for k in state.buy_list if state.buy_list[k]["bonus"]],
         key=lambda k: len(state.buy_list[k]["bonus"]),
         reverse=True,
     )
+
+    # 先通知所有候选币（含无加分的），再只对有加分的下单
+    labels = []
+    for k in sorted(state.buy_list, key=lambda k: len(state.buy_list[k]["bonus"]), reverse=True):
+        bonus = state.buy_list[k]["bonus"]
+        tag = f"{k}({', '.join(bonus)})" if bonus else f"{k}(无加分,跳过)"
+        labels.append(tag)
+    notify(f"可以开多的币（按优先级）：{'; '.join(labels)}")
+
+    if not sorted_keys:
+        notify("没有带加分项的币，跳过开仓")
+        return
 
     acc = ex.get_accounts(ex.PRODUCT_TYPE)
     equity = float(acc["data"][0]["accountEquity"])
@@ -136,13 +149,6 @@ def _select_and_order(all_sym: dict, state: AccountState) -> None:
     if state.position_balance <= 0:
         notify(f"⚠️ 账户余额不足: {equity}，跳过下单")
         return
-
-    labels = []
-    for k in sorted_keys:
-        bonus = state.buy_list[k]["bonus"]
-        tag = f"{k}({', '.join(bonus)})" if bonus else f"{k}(无加分)"
-        labels.append(tag)
-    notify(f"可以开多的币（按优先级）：{'; '.join(labels)}")
 
     for key in sorted_keys:
         cur_price = all_sym[key]["15m"]["data"][-1][4]
@@ -283,6 +289,12 @@ def scan_market(state: AccountState, is_four_hour: bool = False) -> dict:
             except Exception as e:
                 log.warning("获取 %s 资金费率异常: %s", key, e)
 
+        # 盘整放量突破（1H 周期）
+        for key in state.buy_list:
+            if detect_consolidation_breakout(all_sym.get(key, {}), "1H"):
+                state.buy_list[key]["bonus"].append("盘整放量突破")
+                notify(f"🔔 {key} 出现 1H 盘整放量突破信号")
+
     if trend_up_symbols:
         notify(f"多头趋势币({len(trend_up_symbols)})：{', '.join(trend_up_symbols)}")
 
@@ -335,8 +347,14 @@ def _scan_position(state: AccountState) -> None:
 def _full_scan_and_order(state: AccountState, is_four_hour: bool = False) -> dict:
     """执行完整的市场扫描 + 下单 + 辅助分析"""
     all_sym = scan_market(state, is_four_hour)
+
+    # 小成交量+不错涨幅，作为加分项
+    small_vol = set(select_by_volume(all_sym, state))
+    for key in small_vol:
+        if key in state.buy_list:
+            state.buy_list[key]["bonus"].append("小成交量+不错涨幅")
+
     _select_and_order(all_sym, state)
-    select_by_volume(all_sym, state)
     select_by_volume_surge(all_sym, state)
     return all_sym
 

@@ -171,15 +171,17 @@ def select_by_fund_rate(state: AccountState) -> None:
         notify(f"{label}：{result}")
 
 
-def select_by_volume(all_sym: dict, state: AccountState) -> None:
+def select_by_volume(all_sym: dict, state: AccountState) -> list[str]:
     """筛选小成交量 + 不错涨跌幅的币种"""
-    if state.buy_list:
-        result = [
-            sym for sym in state.buy_list
-            if (float(all_sym[sym]["1D"]["data"][-1][2]) > float(all_sym[sym]["1D"]["data"][-1][1]) * 1.2
-                and float(all_sym[sym]["1D"]["data"][-1][6]) < 6_000_000)
-        ]
-        notify(f"小成交量+不错的涨幅：{result}")
+    if not state.buy_list:
+        return []
+    result = [
+        sym for sym in state.buy_list
+        if (float(all_sym[sym]["1D"]["data"][-1][2]) > float(all_sym[sym]["1D"]["data"][-1][1]) * 1.2
+            and float(all_sym[sym]["1D"]["data"][-1][6]) < 6_000_000)
+    ]
+    notify(f"小成交量+不错的涨幅：{result}")
+    return result
 
 
 def select_by_volume_surge(all_sym: dict, state: AccountState) -> None:
@@ -233,3 +235,109 @@ def find_fairy_guide(all_sym: dict, state: AccountState) -> list[str]:
                 break
     notify(f"仙人指路：{result}")
     return result
+
+
+# =============================================================================
+#  盘整放量突破检测（源自 temp.py 策略）
+# =============================================================================
+
+def detect_consolidation_breakout(sym: dict, cycle: str = "1H") -> bool:
+    """
+    检测盘整初期放量突破：均线收敛 → 放量 → 突破新高
+
+    基于 1H 周期数据，需要以下指标已计算：
+    ma30/ma60/ma120/ma160/ma200、rsi、volume_osc、data
+
+    条件：
+    1. 涨幅适中（1%~6%），收盘站上所有均线，实体 > 上影线
+    2. 成交量放量（volume_osc > 40%，或 > 15% 且均线多头排列）
+    3. 收盘创近 120 根 K 线新高，且高于前 3 根最高价
+    4. 均线收敛（最大最小均线差 < 2.8%）
+    5. RSI 在 58~80
+    6. 回溯 10 根 K 线，每根均线宽度 < 3.5% 且 RSI 在 38~82
+    """
+    try:
+        c = sym.get(cycle)
+        if not c:
+            return False
+
+        data = c.get("data", [])
+        rsi = c.get("rsi", [])
+        vol_osc = c.get("volume_osc", [])
+
+        # 需要足够的数据
+        if len(data) < 200 or len(rsi) < 12 or len(vol_osc) < 2:
+            return False
+
+        ma_keys = ["ma30", "ma60", "ma120", "ma160", "ma200"]
+        for k in ma_keys:
+            if k not in c or len(c[k]) < 12:
+                return False
+
+        # 当前 K 线
+        close = float(data[-1][4])
+        open_ = float(data[-1][1])
+        high = float(data[-1][2])
+
+        # 条件 1：涨幅 1%~6%，站上所有均线，实体 > 上影线
+        zf = (close - open_) / open_ if open_ > 0 else 0
+        ma_values = [c[k][-1] for k in ma_keys]
+        ma_max = max(v for v in ma_values if v is not None and v == v)  # 排除 NaN
+        ma_min = min(v for v in ma_values if v is not None and v == v)
+        if not (0.01 < zf < 0.06):
+            return False
+        if close <= ma_max:
+            return False
+        if (close - open_) <= (high - close):
+            return False
+
+        # 条件 2：放量
+        cur_vol_osc = vol_osc[-1]
+        ma30_val = c["ma30"][-1]
+        ma60_val = c["ma60"][-1]
+        ma120_val = c["ma120"][-1]
+        ma200_val = c["ma200"][-1]
+        bullish_aligned = (ma30_val and ma60_val and ma120_val and ma200_val
+                           and ma30_val > ma60_val > ma120_val > ma200_val)
+        if not (cur_vol_osc > 40 or (cur_vol_osc > 15 and bullish_aligned)):
+            return False
+
+        # 条件 3：创 120 根 K 线新高
+        recent_highs = [float(data[i][2]) for i in range(-4, -1)]
+        closes_120 = [float(data[i][4]) for i in range(-121, -1)]
+        if not closes_120:
+            return False
+        max_close_120 = max(closes_120)
+        if close <= max_close_120:
+            return False
+        if not all(close > h for h in recent_highs):
+            return False
+
+        # 条件 4：均线收敛 < 2.8%
+        if ma_min <= 0:
+            return False
+        if (ma_max - ma_min) / ma_min >= 0.028:
+            return False
+
+        # 条件 5：RSI 58~80
+        cur_rsi = rsi[-1]
+        if not (58 < cur_rsi < 80):
+            return False
+
+        # 条件 6：回溯 10 根 K 线，均线宽度 < 3.5% 且 RSI 38~82
+        for i in range(2, 11):
+            i_ma_values = [c[k][-i] for k in ma_keys]
+            i_valid = [v for v in i_ma_values if v is not None and v == v]
+            if len(i_valid) < 5:
+                return False
+            i_max = max(i_valid)
+            i_min = min(i_valid)
+            if i_min <= 0 or (i_max - i_min) / i_max >= 0.035:
+                return False
+            if len(rsi) >= i and not (38 < rsi[-i] < 82):
+                return False
+
+        return True
+
+    except (KeyError, IndexError, ValueError, TypeError):
+        return False
