@@ -139,22 +139,23 @@ async def get_all_data(
             try:
                 copy_resp = ex.copy_get_symbols(ex.PRODUCT_TYPE)
                 if copy_resp.get("code") == "00000":
-                    # 返回格式: [{"symbol": "BTCUSDT", "openTrader": "open", ...}, ...]
-                    # openTrader == "open" 表示该交易对支持带单
-                    copy_symbols = {
-                        item["symbol"]
-                        for item in copy_resp.get("data", [])
-                        if item.get("openTrader") == "open"
-                    }
+                    copy_data = copy_resp.get("data", [])
+                    log.info("带单交易对原始数据(前3条): %s", copy_data[:3])
+                    # data 是对象列表，提取 symbol 字段
+                    if copy_data and isinstance(copy_data[0], dict):
+                        copy_symbols = {item["symbol"] for item in copy_data}
+                    else:
+                        # data 可能直接是字符串列表
+                        copy_symbols = set(copy_data)
                     before = len(symbols["data"])
                     symbols["data"] = [
                         s for s in symbols["data"]
                         if s["symbol"] in copy_symbols
                     ]
                     filtered = before - len(symbols["data"])
-                    if filtered:
-                        log.info("带单过滤：移除 %d 个不支持带单的交易对", filtered)
-                        notify(f"带单过滤：移除 {filtered} 个不支持带单的交易对，剩余 {len(symbols['data'])} 个")
+                    log.info("带单过滤：移除 %d 个不支持带单的交易对，剩余 %d 个",
+                             filtered, len(symbols["data"]))
+                    notify(f"带单过滤：移除 {filtered} 个不支持带单的交易对，剩余 {len(symbols['data'])} 个")
                 else:
                     log.warning("获取带单交易对列表失败: %s", copy_resp.get("msg"))
             except Exception as e:
