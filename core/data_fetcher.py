@@ -140,7 +140,6 @@ async def get_all_data(
                 copy_resp = ex.copy_get_symbols(ex.PRODUCT_TYPE)
                 if copy_resp.get("code") == "00000":
                     copy_data = copy_resp.get("data", [])
-                    log.info("带单交易对原始数据(前3条): %s", copy_data[:3])
                     # data 是对象列表，提取 symbol 字段
                     if copy_data and isinstance(copy_data[0], dict):
                         copy_symbols = {item["symbol"] for item in copy_data}
