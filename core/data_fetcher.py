@@ -134,6 +134,32 @@ async def get_all_data(
     if not key_list:
         symbols = ex.get_all_symbol(ex.PRODUCT_TYPE)
 
+        # 带单模式下，过滤掉不支持带单的交易对
+        if cfg.get("copy_trading_enabled", False):
+            try:
+                copy_resp = ex.copy_get_symbols(ex.PRODUCT_TYPE)
+                if copy_resp.get("code") == "00000":
+                    # 返回格式: [{"symbol": "BTCUSDT", "openTrader": "open", ...}, ...]
+                    # openTrader == "open" 表示该交易对支持带单
+                    copy_symbols = {
+                        item["symbol"]
+                        for item in copy_resp.get("data", [])
+                        if item.get("openTrader") == "open"
+                    }
+                    before = len(symbols["data"])
+                    symbols["data"] = [
+                        s for s in symbols["data"]
+                        if s["symbol"] in copy_symbols
+                    ]
+                    filtered = before - len(symbols["data"])
+                    if filtered:
+                        log.info("带单过滤：移除 %d 个不支持带单的交易对", filtered)
+                        notify(f"带单过滤：移除 {filtered} 个不支持带单的交易对，剩余 {len(symbols['data'])} 个")
+                else:
+                    log.warning("获取带单交易对列表失败: %s", copy_resp.get("msg"))
+            except Exception as e:
+                log.warning("获取带单交易对列表异常: %s", e)
+
         # 48小时内亏损的币不再开仓
         history = ex.get_history_position(ex.PRODUCT_TYPE, str(int(get_time_ms()) - 2 * MS_1D))
         log.debug("48小时内的历史仓位(需要ban掉)：%s", history)
