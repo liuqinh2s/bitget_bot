@@ -36,29 +36,21 @@ def get_current_tracks() -> list[dict]:
 
 def close_track_by_symbol(symbol: str) -> bool:
     """
-    根据交易对平仓所有带单订单。
-    当策略触发平仓时调用，确保跟单者同步平仓。
-    返回 True 表示至少成功平了一笔。
+    带单平仓（兼容新版 Bitget 带单系统）。
+
+    Bitget 已将带单升级为 position-based 模型，交易员直接通过普通交易 API
+    平仓即可，跟单者会自动按比例同步平仓，无需再调用旧的
+    /api/v2/copy/mix-trader/order-close-track 接口。
+
+    本函数保留用于记录日志，实际平仓由 order.py 中的 live_order 完成。
     """
-    ex = get_exchange()
     tracks = get_current_tracks()
-    closed = False
-
-    for track in tracks:
-        if track.get("symbol") != symbol:
-            continue
-        tracking_no = track["trackingNo"]
-        try:
-            resp = ex.copy_close_track(tracking_no, symbol, ex.PRODUCT_TYPE)
-            if resp.get("code") == "00000":
-                notify(f"带单平仓成功: {symbol} trackingNo={tracking_no}")
-                closed = True
-            else:
-                log.warning("带单平仓失败: %s %s", tracking_no, resp.get("msg"))
-        except Exception as e:
-            log.error("带单平仓异常: %s %s - %s", symbol, tracking_no, e)
-
-    return closed
+    has_track = any(t.get("symbol") == symbol for t in tracks)
+    if has_track:
+        notify(f"带单模式: {symbol} 将通过普通平仓同步跟单者")
+    else:
+        log.info("带单模式: %s 无活跃带单订单", symbol)
+    return has_track
 
 
 def sync_tpsl_to_track(symbol: str, stop_profit: str = "",
