@@ -21,10 +21,10 @@ max_drawdown_threshold: 0.10
 # 24h 内爆仓次数阈值
 max_burst_count: 2
 
-# 持仓超时止损（天）
-long_timeout_loss_days: 2
-long_timeout_profit_days: 3
-long_min_profit_pct: 0.06
+# 持仓超时止损
+long_timeout_loss_days: 1       # 持仓超过24小时未盈利则平仓
+long_timeout_profit_days: 2     # 持仓超过48小时盈利未达标则平仓
+long_min_profit_pct: 0.06       # 止盈最低触发标准（48小时判断用）
 
 # 阶梯回撤止盈配置: [涨幅倍数, 允许回撤比例]
 trailing_stop_tiers:

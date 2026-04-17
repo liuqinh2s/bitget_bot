@@ -40,19 +40,19 @@ def cut_profit(symbol: str, sym_data: dict, state: AccountState,
     if state.position[symbol]["holdSide"] != "long":
         return False
 
-    # 持仓超 N 天还亏损
-    timeout_loss = cfg.get("long_timeout_loss_days", 2)
-    if price < price_avg and hold_ms > MS_1D * timeout_loss:
+    # 持仓超 N 天未盈利（默认1天=24小时）
+    timeout_loss = cfg.get("long_timeout_loss_days", 1)
+    if price <= price_avg and hold_ms > MS_1D * timeout_loss:
         order_fn(symbol, data, "SELL", state, only_close=True)
-        notify(f"持仓超过{timeout_loss}天，还是亏损的，平仓")
+        notify(f"持仓超过{timeout_loss * 24:.0f}小时，未盈利，平仓")
         return True
 
-    # 持仓超 N 天盈利不足
-    timeout_profit = cfg.get("long_timeout_profit_days", 3)
+    # 持仓超 N 天盈利未达止盈最低触发标准（默认2天=48小时）
+    timeout_profit = cfg.get("long_timeout_profit_days", 2)
     min_profit_pct = cfg.get("long_min_profit_pct", 0.06)
     if price < price_avg * (1 + min_profit_pct) and hold_ms > MS_1D * timeout_profit:
         order_fn(symbol, data, "SELL", state, only_close=True)
-        notify(f"持仓超过{timeout_profit}天，盈利不足{min_profit_pct*100:.0f}个点，平仓")
+        notify(f"持仓超过{timeout_profit * 24:.0f}小时，盈利未达{min_profit_pct*100:.0f}%，平仓")
         return True
 
     # 布林上轨下弯
