@@ -1,7 +1,7 @@
 """
 环境配置：代理设置与敏感信息
 
-注意：所有敏感信息（API Key、Secret、Telegram Token 等）
+注意：所有敏感信息（API Key、Secret、钉钉 Webhook 等）
      应通过环境变量注入，切勿硬编码在代码中。
 """
 import os
@@ -40,6 +40,8 @@ BITGET_DEMO: bool = os.getenv("BITGET_DEMO", "false").lower() == "true"
 BINANCE_API_KEY: str = os.getenv("BINANCE_API_KEY", "")
 BINANCE_API_SECRET: str = os.getenv("BINANCE_API_SECRET", "")
 
-# ---- Telegram 配置 ----
-TELEGRAM_TOKEN: str = os.getenv("TELEGRAM_TOKEN", "")
-TELEGRAM_CHAT_IDS: list[str] = os.getenv("TELEGRAM_CHAT_IDS", "").split(",")
+# ---- 钉钉配置 ----
+# Webhook 地址（从钉钉群机器人设置中获取）
+DINGTALK_WEBHOOK: str = os.getenv("DINGTALK_WEBHOOK", "")
+# 加签密钥（可选，如果机器人开启了加签安全设置）
+DINGTALK_SECRET: str = os.getenv("DINGTALK_SECRET", "")

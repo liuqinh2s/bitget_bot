@@ -1,6 +1,6 @@
 # 合约自动化交易机器人
 
-多交易所 USDT 永续合约自动化交易机器人，通过多周期技术指标共振 + 成交量异动检测筛选交易机会，支持 Telegram 实时通知。
+多交易所 USDT 永续合约自动化交易机器人，通过多周期技术指标共振 + 成交量异动检测筛选交易机会，支持钉钉实时通知。
 
 ## 支持功能
 
@@ -9,7 +9,7 @@
 - **模拟盘** — Bitget 模拟盘交易，用虚拟资金测试策略，零风险验证
 - **多周期策略** — 15m / 1H / 4H / 1D 趋势共振 + BTC 大盘过滤（仅做多）
 - **动态风控** — 阶梯回撤止盈、时间止损、爆仓保护、最大回撤关停
-- **Telegram 通知** — 交易信号、开平仓、带单状态实时推送
+- **钉钉通知** — 交易信号、开平仓、带单状态实时推送
 
 ## 项目结构
 
@@ -39,9 +39,9 @@
 │   ├── macd.py                  #   MACD
 │   └── ma.py                    #   移动平均线
 └── infra/                       # 基础设施
-    ├── logger.py                #   日志（logging + Telegram handler）
+    ├── logger.py                #   日志（logging + 钉钉 handler）
     ├── config.py                #   配置管理（YAML 热加载）
-    ├── send_msg.py              #   Telegram 消息推送
+    ├── send_msg.py              #   钉钉消息推送
     ├── env.py                   #   环境配置（API 密钥、代理）
     └── util.py                  #   工具函数（时间处理）
 ```
@@ -78,9 +78,9 @@ BITGET_DEMO=false
 BINANCE_API_KEY=your_binance_api_key
 BINANCE_API_SECRET=your_binance_api_secret
 
-# Telegram 通知
-TELEGRAM_TOKEN=your_bot_token
-TELEGRAM_CHAT_IDS=-123456789
+# 钉钉通知
+DINGTALK_WEBHOOK=https://oapi.dingtalk.com/robot/send?access_token=your_token
+DINGTALK_SECRET=your_secret
 ```
 
 ### 3. 调整交易参数
