@@ -114,7 +114,7 @@ def is_1d_trend_up(sym: dict) -> bool:
     close = float(sym["1D"]["data"][-1][4])
     return (
         mid[-1] > mid[-2] > mid[-3] > mid[-4]
-        and upper[-1] > upper[-2] > upper[-3] > upper[-4]
+        and upper[-1] > upper[-2] > upper[-3]
         and close > mid[-1]
     )
 

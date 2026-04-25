@@ -55,9 +55,9 @@ def cut_profit(symbol: str, sym_data: dict, state: AccountState,
         notify(f"持仓超过{timeout_profit * 24:.0f}小时，盈利未达{min_profit_pct*100:.0f}%，平仓")
         return True
 
-    # 布林上轨下弯
+    # 布林上轨连续两日下弯
     upper = sym_data["1D"]["bolling"]["Upper Band"]
-    if upper[-1] < upper[-2]:
+    if upper[-1] < upper[-2] < upper[-3]:
         order_fn(symbol, data, "SELL", state, only_close=True)
         notify("布林线上轨下弯，平仓")
         return True
