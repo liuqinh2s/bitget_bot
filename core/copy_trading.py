@@ -14,7 +14,7 @@ from typing import TYPE_CHECKING
 
 from api.factory import get_exchange
 from infra.config import get_config
-from infra.logger import log, notify
+from infra.logger import log
 
 if TYPE_CHECKING:
     from models import AccountState
@@ -47,7 +47,7 @@ def close_track_by_symbol(symbol: str) -> bool:
     tracks = get_current_tracks()
     has_track = any(t.get("symbol") == symbol for t in tracks)
     if has_track:
-        notify(f"带单模式: {symbol} 将通过普通平仓同步跟单者")
+        log.info("带单模式: %s 将通过普通平仓同步跟单者", symbol)
     else:
         log.info("带单模式: %s 无活跃带单订单", symbol)
     return has_track
@@ -85,7 +85,7 @@ def report_copy_trading_status() -> None:
     """汇报当前带单状态：当前带单数、跟单人数等"""
     tracks = get_current_tracks()
     if not tracks:
-        notify("当前无带单订单")
+        log.info("当前无带单订单")
         return
 
     total_followers = 0
@@ -102,7 +102,7 @@ def report_copy_trading_status() -> None:
             f"跟单:{followers}人"
         )
     lines.append(f"总跟单人数: {total_followers}")
-    notify("\n".join(lines))
+    log.info("\n".join(lines))
 
 
 def report_history_summary(limit: str = "20") -> None:
@@ -115,17 +115,15 @@ def report_history_summary(limit: str = "20") -> None:
             return
         tracks = resp.get("data", {}).get("trackingList", []) or []
         if not tracks:
-            notify("暂无历史带单记录")
+            log.info("暂无历史带单记录")
             return
 
         total_pl = sum(float(t.get("achievedPL", 0)) for t in tracks)
         win = sum(1 for t in tracks if float(t.get("achievedPL", 0)) > 0)
         lose = sum(1 for t in tracks if float(t.get("achievedPL", 0)) < 0)
-        notify(
-            f"最近 {len(tracks)} 笔带单: "
-            f"盈亏={total_pl:.4f} USDT, "
-            f"盈利 {win} 笔, 亏损 {lose} 笔, "
-            f"胜率={win / len(tracks) * 100:.1f}%"
+        log.info(
+            "最近 %d 笔带单: 盈亏=%.4f USDT, 盈利 %d 笔, 亏损 %d 笔, 胜率=%.1f%%",
+            len(tracks), total_pl, win, lose, win / len(tracks) * 100,
         )
     except Exception as e:
         log.warning("获取历史带单异常: %s", e)

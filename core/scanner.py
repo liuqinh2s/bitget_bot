@@ -5,7 +5,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from infra.logger import notify
+from infra.logger import log
 
 if TYPE_CHECKING:
     from models import AccountState
@@ -140,10 +140,9 @@ def batch_detect_volume_anomaly(all_sym: dict, symbols: list[str],
         if _is_4h_anomaly(all_sym, sym, 0, direction):
             result["4H"].append(sym)
 
-    notify(
-        f"15m成交量异动：{result['15m']} "
-        f"1H成交量异动：{result['1H']} "
-        f"4H成交量异动：{result['4H']}"
+    log.info(
+        "15m成交量异动：%s 1H成交量异动：%s 4H成交量异动：%s",
+        result['15m'], result['1H'], result['4H'],
     )
     return result["15m"] + result["1H"] + result["4H"]
 
@@ -168,7 +167,7 @@ def select_by_fund_rate(state: AccountState) -> None:
             total = sum(float(x["fundingRate"]) for x in fund_rate["data"])
             if cmp(total, threshold):
                 result.append(sym)
-        notify(f"{label}：{result}")
+        log.info("%s：%s", label, result)
 
 
 def select_by_volume(all_sym: dict, state: AccountState) -> list[str]:
@@ -180,7 +179,7 @@ def select_by_volume(all_sym: dict, state: AccountState) -> list[str]:
         if (float(all_sym[sym]["1D"]["data"][-1][2]) > float(all_sym[sym]["1D"]["data"][-1][1]) * 1.2
             and float(all_sym[sym]["1D"]["data"][-1][6]) < 6_000_000)
     ]
-    notify(f"小成交量+不错的涨幅：{result}")
+    log.info("小成交量+不错的涨幅：%s", result)
     return result
 
 
@@ -196,7 +195,7 @@ def select_by_volume_surge(all_sym: dict, state: AccountState) -> None:
         cur_change = float(bar[4]) / float(bar[1])
         if cur_vol > vol_sum and (cur_vol > 10_000_000 or cur_change > 1.2):
             result.append(sym)
-    notify(f"日成交量比前三日加起来还多：{result}")
+    log.info("日成交量比前三日加起来还多：%s", result)
 
 
 def find_leading_coins(all_sym: dict) -> list[str]:
@@ -210,7 +209,7 @@ def find_leading_coins(all_sym: dict) -> list[str]:
             if float(data[-1 + i][4]) > float(data[-5 + i][4]) * 1.2:
                 result.append(key)
                 break
-    notify(f"近5天的龙头币: {result}")
+    log.info("近5天的龙头币: %s", result)
     return result
 
 
@@ -233,7 +232,7 @@ def find_fairy_guide(all_sym: dict, state: AccountState) -> list[str]:
             if v > vol_sum and o * 1.2 < h < o * 1.6 and h * 0.92 > c > o:
                 result.append(sym)
                 break
-    notify(f"仙人指路：{result}")
+    log.info("仙人指路：%s", result)
     return result
 
 

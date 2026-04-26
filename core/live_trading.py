@@ -121,7 +121,7 @@ def _select_and_order(all_sym: dict, state: AccountState) -> None:
     ex = get_exchange()
 
     if not state.buy_list:
-        notify("可以开多的币：无")
+        log.info("可以开多的币：无")
         return
 
     # 按加分项数量降序排序，过滤掉没有加分项的币
@@ -137,17 +137,17 @@ def _select_and_order(all_sym: dict, state: AccountState) -> None:
         bonus = state.buy_list[k]["bonus"]
         tag = f"{k}({', '.join(bonus)})" if bonus else f"{k}(无加分,跳过)"
         labels.append(tag)
-    notify(f"可以开多的币（按优先级）：{'; '.join(labels)}")
+    log.info("可以开多的币（按优先级）：%s", '; '.join(labels))
 
     if not sorted_keys:
-        notify("没有带加分项的币，跳过开仓")
+        log.info("没有带加分项的币，跳过开仓")
         return
 
     acc = ex.get_accounts(ex.PRODUCT_TYPE)
     equity = float(acc["data"][0]["accountEquity"])
     state.update_balance(equity)
     if state.position_balance <= 0:
-        notify(f"⚠️ 账户余额不足: {equity}，跳过下单")
+        log.warning("⚠️ 账户余额不足: %s，跳过下单", equity)
         return
 
     for key in sorted_keys:
@@ -157,16 +157,16 @@ def _select_and_order(all_sym: dict, state: AccountState) -> None:
             str(state.position_balance), cur_price,
             str(cfg.get("leverage", 10)),
         )
-        notify(f"币种：{key} 可开数量：{res['data']['size']}")
+        log.info("币种：%s 可开数量：%s", key, res['data']['size'])
 
         min_size = state.position_balance * 0.1 / float(cur_price)
         if float(res["data"]["size"]) / 2 < min_size:
-            notify("可开数量不足")
+            log.info("可开数量不足")
             continue
 
         max_positions = cfg.get("max_long_positions", 3)
         if len(state.position) >= max_positions:
-            notify(f"已达最大持仓数 {max_positions}，停止开仓")
+            log.info("已达最大持仓数 %d，停止开仓", max_positions)
             break
         order(key, all_sym[key]["15m"]["data"], "BUY", state)
 
@@ -192,7 +192,7 @@ def scan_market(state: AccountState, is_four_hour: bool = False) -> dict:
     start_time = int(get_time_ms())
     asyncio.run(get_all_data(["1D", "4H", "1H", "15m"], all_sym, state=state))
     elapsed = (int(get_time_ms()) - start_time) / 1000
-    notify(f"抓一遍所有币的数据，耗费时间：{elapsed}s")
+    log.info("抓一遍所有币的数据，耗费时间：%.1fs", elapsed)
 
     compute_indicators(all_sym)
 
@@ -260,7 +260,7 @@ def scan_market(state: AccountState, is_four_hour: bool = False) -> dict:
         # 成交量异动检测，有异动的币标记加分
         anomaly_tf = detect_volume_anomaly(all_sym, key, "buy", volume_anomaly)
         if anomaly_tf:
-            notify(f"🔔 {key} 出现 {anomaly_tf} 成交量异动")
+            log.info("🔔 %s 出现 %s 成交量异动", key, anomaly_tf)
             if key in state.buy_list:
                 state.buy_list[key]["bonus"].append(f"成交量异动({anomaly_tf})")
 
@@ -293,19 +293,14 @@ def scan_market(state: AccountState, is_four_hour: bool = False) -> dict:
         for key in state.buy_list:
             if detect_consolidation_breakout(all_sym.get(key, {}), "1H"):
                 state.buy_list[key]["bonus"].append("盘整放量突破")
-                notify(f"🔔 {key} 出现 1H 盘整放量突破信号")
+                log.info("🔔 %s 出现 1H 盘整放量突破信号", key)
 
     if trend_up_symbols:
-        notify(f"多头趋势币({len(trend_up_symbols)})：{', '.join(trend_up_symbols)}")
+        log.info("多头趋势币(%d)：%s", len(trend_up_symbols), ', '.join(trend_up_symbols))
 
     log.info(
         "扫描完成，全部交易对：%d 可分析：%d 新币:%s 空数据:%s 数据旧:%s",
         len(all_keys), len(valid_symbols), new_symbols, no_data_symbols, old_data_symbols,
-    )
-    notify(f"扫描完成，全部交易对：{len(all_keys)}")
-    notify(
-        f"可分析：{len(valid_symbols)} 数据旧:{old_data_symbols} "
-        f"空数据:{no_data_symbols} 新币:{new_symbols}"
     )
     return all_sym
 
@@ -432,4 +427,4 @@ def main() -> None:
                 sleep(interval - remainder + 1)
         except Exception as e:
             log.error("主循环异常: %s", e, exc_info=True)
-            notify(str(e))
+            notify(f"主循环异常: {e}")

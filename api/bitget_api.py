@@ -15,7 +15,7 @@ from typing import Any
 import requests
 
 from infra.env import NEED_PROXY, PROXIES, API_KEY, API_SECRET, API_PASSPHRASE, BITGET_DEMO
-from infra.logger import log, notify
+from infra.logger import log
 from api.retry import retry
 from infra.util import get_time_ms
 
@@ -76,7 +76,7 @@ def _get(path: str, query_str: str) -> Any:
 def _post(path: str, data: dict) -> Any:
     """带签名的 POST 请求（修复：仅使用 json 参数，不再同时传 data）"""
     body = json.dumps(data)
-    notify(f"host:{HOST} method:{path} data:{body}")
+    log.debug("host:%s method:%s data:%s", HOST, path, body)
     headers = _sign_headers("POST", path, "", body)
     url = f"https://{HOST}{path}"
     resp = _session.post(url, json=data, headers=headers)

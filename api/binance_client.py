@@ -18,7 +18,7 @@ import requests
 from api.exchange import ExchangeAPI
 from api.retry import retry
 from infra.env import NEED_PROXY, PROXIES
-from infra.logger import log, notify
+from infra.logger import log
 from infra.util import get_time_ms
 
 
@@ -70,7 +70,7 @@ class BinanceClient(ExchangeAPI):
     @retry(max_attempts=3, delay=2.0)
     def _post(self, path: str, params: dict | None = None) -> Any:
         params = self._sign_params(params or {})
-        notify(f"host:{self.HOST} method:{path} data:{params}")
+        log.debug("host:%s method:%s data:%s", self.HOST, path, params)
         url = f"https://{self.HOST}{path}"
         resp = self._session.post(url, params=params)
         resp.raise_for_status()

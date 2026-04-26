@@ -18,7 +18,7 @@ from analysis.rsi import calculate_rsi
 from api.factory import get_exchange
 from infra.config import get_config
 from infra.env import NEED_PROXY, PROXIES
-from infra.logger import log, notify
+from infra.logger import log
 from infra.util import get_time_ms
 
 if TYPE_CHECKING:
@@ -154,7 +154,6 @@ async def get_all_data(
                     filtered = before - len(symbols["data"])
                     log.info("带单过滤：移除 %d 个不支持带单的交易对，剩余 %d 个",
                              filtered, len(symbols["data"]))
-                    notify(f"带单过滤：移除 {filtered} 个不支持带单的交易对，剩余 {len(symbols['data'])} 个")
                 else:
                     log.warning("获取带单交易对列表失败: %s", copy_resp.get("msg"))
             except Exception as e:
@@ -164,14 +163,14 @@ async def get_all_data(
         history = ex.get_history_position(ex.PRODUCT_TYPE, str(int(get_time_ms()) - 2 * MS_1D))
         log.debug("48小时内的历史仓位(需要ban掉)：%s", history)
         loss_ban = [p["symbol"] for p in history["data"]["list"] if float(p["netProfit"]) < 0]
-        notify(f"48小时内亏损的币(ban)：{loss_ban}")
+        log.info("48小时内亏损的币(ban)：%s", loss_ban)
 
         # 12小时内平过仓的币进入冷却期
         MS_12H = 12 * 60 * 60 * 1000
         history_12h = ex.get_history_position(ex.PRODUCT_TYPE, str(int(get_time_ms()) - MS_12H))
         cooldown_ban = [p["symbol"] for p in history_12h["data"]["list"]]
         if cooldown_ban:
-            notify(f"12小时内平仓冷却(ban)：{cooldown_ban}")
+            log.info("12小时内平仓冷却(ban)：%s", cooldown_ban)
 
         position_keys = list(state.position.keys()) if state else []
         ban_stock = cfg.get("ban_stock_list", [])

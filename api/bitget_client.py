@@ -16,7 +16,7 @@ import requests
 from api.exchange import ExchangeAPI
 from api.retry import retry
 from infra.env import NEED_PROXY, PROXIES, BITGET_DEMO
-from infra.logger import log, notify
+from infra.logger import log
 from infra.util import get_time_ms
 
 
@@ -71,7 +71,7 @@ class BitgetClient(ExchangeAPI):
     @retry(max_attempts=3, delay=2.0)
     def _post(self, path: str, data: dict) -> Any:
         body = json.dumps(data)
-        notify(f"host:{self.HOST} method:{path} data:{body}")
+        log.debug("host:%s method:%s data:%s", self.HOST, path, body)
         headers = self._sign("POST", path, "", body)
         url = f"https://{self.HOST}{path}"
         resp = self._session.post(url, json=data, headers=headers)

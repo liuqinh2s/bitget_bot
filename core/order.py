@@ -50,9 +50,9 @@ def close_position(symbol: str, state: AccountState) -> float:
         symbol, ex.PRODUCT_TYPE, "isolated", "USDT",
         "buy", available, "market", "close",
     )
-    notify(f"orderInfo: {order_info}")
+    log.info("orderInfo: %s", order_info)
     detail = _wait_for_filled(symbol, order_info)
-    notify(f"orderDetail: {detail}")
+    log.info("orderDetail: %s", detail)
 
     profit = float(detail["data"]["totalProfits"])
     notify(
@@ -69,13 +69,13 @@ def close_position(symbol: str, state: AccountState) -> float:
     state.update_drawdown(profit)
     state.position_type = ""
 
-    notify(f"当前最大回撤：{state.max_drawdown}")
-    notify(f"资产最高峰：{state.largest_balance}")
-    notify(f"账户总额：{state.balance}")
+    log.info("当前最大回撤：%s", state.max_drawdown)
+    log.info("资产最高峰：%s", state.largest_balance)
+    log.info("账户总额：%s", state.balance)
 
     duration = state.reset_position_time()
-    notify(f"做多天数：{_ms_to_days(duration)}")
-    notify(f"总做多天数: {_ms_to_days(state.all_long_position_time)}")
+    log.info("做多天数：%s", _ms_to_days(duration))
+    log.info("总做多天数: %s", _ms_to_days(state.all_long_position_time))
 
     state.position_balance = state.balance
     return profit
@@ -89,7 +89,7 @@ def open_position(symbol: str, price: float, state: AccountState) -> None:
         symbol, ex.PRODUCT_TYPE, "USDT", None,
         cfg.get("leverage", 10), None, "long",
     )
-    notify(f"调整杠杆：{leverage_info}")
+    log.info("调整杠杆：%s", leverage_info)
 
     min_usdt = cfg.get("min_usdt", 10)
     position_balance = min_usdt if state.is_shutdown else state.position_balance
@@ -99,9 +99,9 @@ def open_position(symbol: str, price: float, state: AccountState) -> None:
         symbol, ex.PRODUCT_TYPE, "isolated", "USDT",
         "buy", position_balance / price, "market", "open",
     )
-    notify(f"orderInfo: {order_info}")
+    log.info("orderInfo: %s", order_info)
     detail = _wait_for_filled(symbol, order_info)
-    notify(f"orderDetail: {detail}")
+    log.info("orderDetail: %s", detail)
 
     filled_price = float(detail["data"]["priceAvg"])
 
@@ -122,8 +122,8 @@ def open_position(symbol: str, price: float, state: AccountState) -> None:
         sync_tpsl_to_track(symbol, "", "")
 
     duration = state.reset_no_position_time()
-    notify(f"空仓天数：{_ms_to_days(duration)}")
-    notify(f"总空仓天数: {_ms_to_days(state.all_no_position_time)}")
+    log.info("空仓天数：%s", _ms_to_days(duration))
+    log.info("总空仓天数: %s", _ms_to_days(state.all_no_position_time))
 
     notify(
         f"时间: {get_human_time(detail['data']['cTime'])} {symbol} 开多, "
