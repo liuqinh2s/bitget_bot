@@ -156,10 +156,14 @@ def open_position(symbol: str, price: float, state: AccountState,
     log.info("空仓天数：%s", _ms_to_days(duration))
     log.info("总空仓天数: %s", _ms_to_days(state.all_no_position_time))
 
+    # 组装开仓原因信息
+    reason_info = f"原因: {reason}" if reason else "原因: 无"
+    bonus_info = f" 加分项: {', '.join(bonus)}" if bonus else ""
     notify(
         f"时间: {get_human_time(detail['data']['cTime'])} {symbol} 开多, "
         f"价格: {filled_price} 开仓量:{detail['data']['quoteVolume']}u "
-        f"持仓量:{detail['data']['baseVolume']} 手续费:{detail['data']['fee']}"
+        f"持仓量:{detail['data']['baseVolume']} 手续费:{detail['data']['fee']} "
+        f"{reason_info}{bonus_info}"
     )
 
     # 写入交易日志
