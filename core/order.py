@@ -9,7 +9,8 @@ from typing import TYPE_CHECKING
 from api.factory import get_exchange
 from infra.config import get_config
 from infra.logger import log, notify
-from infra.util import get_human_time
+from infra.trade_log import log_open, log_close
+from infra.util import get_human_time, get_time_ms
 from core.copy_trading import close_track_by_symbol, sync_tpsl_to_track
 
 if TYPE_CHECKING:
@@ -32,9 +33,11 @@ def _ms_to_days(ms: int | float) -> float:
     return ms / 1000 / 60 / 60 / 24
 
 
-def close_position(symbol: str, state: AccountState) -> float:
+def close_position(symbol: str, state: AccountState,
+                   close_reason: str = "手动平仓") -> float:
     """
     平多仓
+    :param close_reason: 平仓原因（由 cut_profit 等调用方传入）
     :return: 本次盈亏
     """
     cfg = get_config()
@@ -55,11 +58,37 @@ def close_position(symbol: str, state: AccountState) -> float:
     log.info("orderDetail: %s", detail)
 
     profit = float(detail["data"]["totalProfits"])
+    close_price = float(detail["data"]["priceAvg"])
+    open_price = float(state.position[symbol]["openPriceAvg"])
+    c_time = int(state.position[symbol]["cTime"])
+    hold_hours = (int(get_time_ms()) - c_time) / 1000 / 3600
+
+    # 最高浮盈
+    max_floating_pct = 0.0
+    track = state.price_track.get(symbol)
+    if track and open_price > 0:
+        max_floating_pct = (track["priceHigh"] - open_price) / open_price * 100
+
     notify(
         f"时间: {get_human_time(detail['data']['cTime'])} {symbol} 平多, "
         f"价格: {detail['data']['priceAvg']} "
         f"持仓量:{detail['data']['baseVolume']} "
         f"手续费:{detail['data']['fee']} 盈亏: {profit}"
+    )
+
+    # 写入交易日志
+    log_close(
+        symbol=symbol,
+        close_price=close_price,
+        open_price=open_price,
+        base_volume=detail["data"]["baseVolume"],
+        fee=detail["data"]["fee"],
+        profit=profit,
+        hold_hours=hold_hours,
+        max_floating_pct=max_floating_pct,
+        close_reason=close_reason,
+        balance=state.balance + profit,
+        ctime=detail["data"]["cTime"],
     )
 
     # 从内存中移除已平仓位
@@ -81,13 +110,15 @@ def close_position(symbol: str, state: AccountState) -> float:
     return profit
 
 
-def open_position(symbol: str, price: float, state: AccountState) -> None:
+def open_position(symbol: str, price: float, state: AccountState,
+                  reason: str = "", bonus: list[str] | None = None) -> None:
     """开多仓"""
     ex = get_exchange()
     cfg = get_config()
+    leverage = cfg.get("leverage", 10)
     leverage_info = ex.set_leverage(
         symbol, ex.PRODUCT_TYPE, "USDT", None,
-        cfg.get("leverage", 10), None, "long",
+        leverage, None, "long",
     )
     log.info("调整杠杆：%s", leverage_info)
 
@@ -131,18 +162,37 @@ def open_position(symbol: str, price: float, state: AccountState) -> None:
         f"持仓量:{detail['data']['baseVolume']} 手续费:{detail['data']['fee']}"
     )
 
+    # 写入交易日志
+    log_open(
+        symbol=symbol,
+        filled_price=filled_price,
+        quote_volume=detail["data"]["quoteVolume"],
+        base_volume=detail["data"]["baseVolume"],
+        fee=detail["data"]["fee"],
+        leverage=leverage,
+        reason=reason,
+        bonus=bonus or [],
+        balance=state.balance,
+        ctime=detail["data"]["cTime"],
+    )
+
 
 def order(symbol: str, data: list, order_type: str,
           state: AccountState, only_close: bool = False,
-          cut: dict | None = None) -> None:
+          cut: dict | None = None,
+          reason: str = "", bonus: list[str] | None = None,
+          close_reason: str = "") -> None:
     """
     统一下单入口
 
-    :param symbol:     交易对
-    :param data:       K 线数据列表
-    :param order_type: 'BUY'（开多）或 'SELL'（平多）
-    :param state:      账户状态
-    :param only_close: True 时只平仓不开新仓
+    :param symbol:       交易对
+    :param data:         K 线数据列表
+    :param order_type:   'BUY'（开多）或 'SELL'（平多）
+    :param state:        账户状态
+    :param only_close:   True 时只平仓不开新仓
+    :param reason:       开仓选币原因
+    :param bonus:        开仓加分项列表
+    :param close_reason: 平仓原因
     """
     price = float(data[-1][4])
     profit = 0.0
@@ -153,11 +203,11 @@ def order(symbol: str, data: list, order_type: str,
             if pos and pos["holdSide"] == "long":
                 return  # 已持有多仓
             if not only_close:
-                open_position(symbol, price, state)
+                open_position(symbol, price, state, reason=reason, bonus=bonus)
         else:  # SELL = 平多
             pos = state.position.get(symbol)
             if pos and pos["holdSide"] == "long":
-                profit = close_position(symbol, state)
+                profit = close_position(symbol, state, close_reason=close_reason or "未知")
 
         state.record_profit(profit, order_type)
     except TimeoutError as e:

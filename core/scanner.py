@@ -340,3 +340,67 @@ def detect_consolidation_breakout(sym: dict, cycle: str = "1H") -> bool:
 
     except (KeyError, IndexError, ValueError, TypeError):
         return False
+
+
+# =============================================================================
+#  强势启动检测（4H MA 多头排列加速）
+# =============================================================================
+
+def detect_early_strong_trend(sym: dict) -> bool:
+    """
+    强势启动：4H 周期 MA 多头排列且加速发散
+
+    条件：
+    - ma10 > ma20 > ma40
+    - ma80 > ma160
+    - ma10 > ma80
+    - (ma10 - ma20) > (前7根ma10 - 前7根ma20) * 2
+    - (ma20 - ma40) > (前7根ma20 - 前7根ma40) * 2
+    - (前7根ma20 - 前7根ma40) / 前7根ma40 in [1.01, 1.015)
+    """
+    try:
+        c = sym.get("4H")
+        if not c:
+            return False
+
+        ma_keys = ["ma10", "ma20", "ma40", "ma80", "ma160"]
+        for k in ma_keys:
+            if k not in c or len(c[k]) < 9:
+                return False
+
+        ma10 = c["ma10"]
+        ma20 = c["ma20"]
+        ma40 = c["ma40"]
+        ma80 = c["ma80"]
+        ma160 = c["ma160"]
+
+        if not (ma10[-1] > ma20[-1] > ma40[-1]):
+            return False
+
+        if not (ma80[-1] > ma160[-1]):
+            return False
+
+        if not (ma10[-1] > ma80[-1]):
+            return False
+
+        cur_diff_10_20 = ma10[-1] - ma20[-1]
+        prev_diff_10_20 = ma10[-8] - ma20[-8]
+        if cur_diff_10_20 <= prev_diff_10_20 * 2:
+            return False
+
+        cur_diff_20_40 = ma20[-1] - ma40[-1]
+        prev_diff_20_40 = ma20[-8] - ma40[-8]
+        if cur_diff_20_40 <= prev_diff_20_40 * 2:
+            return False
+
+        if ma40[-8] <= 0:
+            return False
+        prev_ratio = prev_diff_20_40 / ma40[-8]
+        if prev_ratio < 1.01:
+            return False
+        if prev_ratio >= 1.015:
+            return False
+
+        return True
+    except (KeyError, IndexError, ValueError, TypeError):
+        return False

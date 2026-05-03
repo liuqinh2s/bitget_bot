@@ -26,7 +26,7 @@ from core.position import cut_profit, track_price
 from core.scanner import (
     detect_volume_anomaly, select_by_volume,
     select_by_volume_surge, find_fairy_guide, find_leading_coins,
-    detect_consolidation_breakout,
+    detect_consolidation_breakout, detect_early_strong_trend,
 )
 from core.strategy import (
     is_15m_trend_up, is_1h_trend_up, is_4h_trend_up, is_1d_trend_up,
@@ -168,7 +168,10 @@ def _select_and_order(all_sym: dict, state: AccountState) -> None:
         if len(state.position) >= max_positions:
             log.info("已达最大持仓数 %d，停止开仓", max_positions)
             break
-        order(key, all_sym[key]["15m"]["data"], "BUY", state)
+        buy_info = state.buy_list[key]
+        order(key, all_sym[key]["15m"]["data"], "BUY", state,
+              reason=buy_info.get("reason", ""),
+              bonus=buy_info.get("bonus", []))
 
 
 # =============================================================================
@@ -294,6 +297,12 @@ def scan_market(state: AccountState, is_four_hour: bool = False) -> dict:
             if detect_consolidation_breakout(all_sym.get(key, {}), "1H"):
                 state.buy_list[key]["bonus"].append("盘整放量突破")
                 log.info("🔔 %s 出现 1H 盘整放量突破信号", key)
+
+        # 强势启动（4H MA多头排列加速）
+        for key in state.buy_list:
+            if detect_early_strong_trend(all_sym.get(key, {})):
+                state.buy_list[key]["bonus"].append("强势启动")
+                log.info("🔔 %s 出现 4H 强势启动信号", key)
 
     if trend_up_symbols:
         log.info("多头趋势币(%d)：%s", len(trend_up_symbols), ', '.join(trend_up_symbols))

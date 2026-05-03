@@ -43,7 +43,8 @@ def cut_profit(symbol: str, sym_data: dict, state: AccountState,
     # 持仓超 N 天未盈利（默认1天=24小时）
     timeout_loss = cfg.get("long_timeout_loss_days", 1)
     if price <= price_avg and hold_ms > MS_1D * timeout_loss:
-        order_fn(symbol, data, "SELL", state, only_close=True)
+        reason = f"超时未盈利({timeout_loss * 24:.0f}h)"
+        order_fn(symbol, data, "SELL", state, only_close=True, close_reason=reason)
         notify(f"持仓超过{timeout_loss * 24:.0f}小时，未盈利，平仓")
         return True
 
@@ -51,14 +52,16 @@ def cut_profit(symbol: str, sym_data: dict, state: AccountState,
     timeout_profit = cfg.get("long_timeout_profit_days", 2)
     min_profit_pct = cfg.get("long_min_profit_pct", 0.06)
     if price < price_avg * (1 + min_profit_pct) and hold_ms > MS_1D * timeout_profit:
-        order_fn(symbol, data, "SELL", state, only_close=True)
+        cur_pct = (price - price_avg) / price_avg * 100
+        reason = f"超时盈利不足({timeout_profit * 24:.0f}h, 当前{cur_pct:.1f}%<{min_profit_pct*100:.0f}%)"
+        order_fn(symbol, data, "SELL", state, only_close=True, close_reason=reason)
         notify(f"持仓超过{timeout_profit * 24:.0f}小时，盈利未达{min_profit_pct*100:.0f}%，平仓")
         return True
 
     # 布林上轨连续两日下弯（需要至少 3 个有效值）
     upper = [v for v in sym_data["1D"]["bolling"]["Upper Band"] if v == v]  # 过滤 NaN
     if len(upper) >= 3 and upper[-1] < upper[-2] < upper[-3]:
-        order_fn(symbol, data, "SELL", state, only_close=True)
+        order_fn(symbol, data, "SELL", state, only_close=True, close_reason="布林上轨连续下弯")
         notify("布林线上轨下弯，平仓")
         return True
 
@@ -74,12 +77,14 @@ def cut_profit(symbol: str, sym_data: dict, state: AccountState,
             trigger = (price_avg + price_high) / 2
             if trigger > price:
                 pct = (price_high - price_avg) * 100 / price_avg
-                order_fn(symbol, data, "SELL", state, only_close=True)
+                reason = f"阶梯止盈(涨{pct:.2f}%,回落一半)"
+                order_fn(symbol, data, "SELL", state, only_close=True, close_reason=reason)
                 notify(f"止盈单，涨{pct:.2f}%，回落一半")
                 return True
         else:
             if price_high > price * (1 + pullback):
-                order_fn(symbol, data, "SELL", state, only_close=True)
+                reason = f"阶梯止盈(涨>{(gain_mult - 1) * 100:.0f}%,回撤{pullback * 100:.0f}%)"
+                order_fn(symbol, data, "SELL", state, only_close=True, close_reason=reason)
                 notify(
                     f"止盈单，涨{(gain_mult - 1) * 100:.0f}%，"
                     f"回落{pullback * 100:.0f}%"
