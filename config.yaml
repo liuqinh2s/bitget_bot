@@ -26,6 +26,10 @@ long_timeout_loss_days: 1       # 持仓超过24小时未盈利则平仓
 long_timeout_profit_days: 2     # 持仓超过48小时盈利未达标则平仓
 long_min_profit_pct: 0.06       # 止盈最低触发标准（48小时判断用）
 
+# 分段止盈：每上涨2%，卖出剩余持仓的2%；下一段涨幅基于上一段触发价计算
+partial_take_profit_step_pct: 0.02
+partial_take_profit_sell_pct: 0.02
+
 # 阶梯回撤止盈配置: [涨幅倍数, 允许回撤比例]
 trailing_stop_tiers:
   - [1.50, 0.50]

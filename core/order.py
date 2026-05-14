@@ -3,6 +3,7 @@
 """
 from __future__ import annotations
 
+from decimal import Decimal
 from time import sleep
 from typing import TYPE_CHECKING
 
@@ -33,11 +34,23 @@ def _ms_to_days(ms: int | float) -> float:
     return ms / 1000 / 60 / 60 / 24
 
 
+def _to_decimal(value) -> Decimal:
+    """将交易所返回的数值安全转成 Decimal。"""
+    return Decimal(str(value))
+
+
+def _format_size(size: Decimal) -> str:
+    """格式化下单数量，避免科学计数法。"""
+    return format(size.normalize(), "f")
+
+
 def close_position(symbol: str, state: AccountState,
-                   close_reason: str = "手动平仓") -> float:
+                   close_reason: str = "手动平仓",
+                   close_size=None) -> float:
     """
-    平多仓
+    平多仓，可指定 close_size 做部分平仓。
     :param close_reason: 平仓原因（由 cut_profit 等调用方传入）
+    :param close_size: 不传则全平；传入时按指定数量部分平仓
     :return: 本次盈亏
     """
     cfg = get_config()
@@ -46,12 +59,19 @@ def close_position(symbol: str, state: AccountState,
     # 带单模式：先通过带单 API 平仓，确保跟单者同步
     if cfg.get("copy_trading_enabled", False):
         close_track_by_symbol(symbol)
-    available = state.position[symbol]["available"]
-    log.info("下单量：%su  平多", available)
+    available = _to_decimal(state.position[symbol]["available"])
+    size = available if close_size is None else min(_to_decimal(close_size), available)
+    if size <= 0:
+        log.warning("%s 可平仓数量为 0，跳过平仓", symbol)
+        return 0.0
+    is_full_close = size >= available
+    size_str = _format_size(size)
+    action_name = "平多" if is_full_close else "部分平多"
+    log.info("下单量：%su  %s", size_str, action_name)
 
     order_info = ex.live_order(
         symbol, ex.PRODUCT_TYPE, "isolated", "USDT",
-        "buy", available, "market", "close",
+        "buy", size_str, "market", "close",
     )
     log.info("orderInfo: %s", order_info)
     detail = _wait_for_filled(symbol, order_info)
@@ -70,7 +90,7 @@ def close_position(symbol: str, state: AccountState,
         max_floating_pct = (track["priceHigh"] - open_price) / open_price * 100
 
     notify(
-        f"时间: {get_human_time(detail['data']['cTime'])} {symbol} 平多, "
+        f"时间: {get_human_time(detail['data']['cTime'])} {symbol} {action_name}, "
         f"价格: {detail['data']['priceAvg']} "
         f"持仓量:{detail['data']['baseVolume']} "
         f"手续费:{detail['data']['fee']} 盈亏: {profit}"
@@ -91,20 +111,29 @@ def close_position(symbol: str, state: AccountState,
         ctime=detail["data"]["cTime"],
     )
 
-    # 从内存中移除已平仓位
-    state.position.pop(symbol, None)
-    state.price_track.pop(symbol, None)
-
     state.update_drawdown(profit)
-    state.position_type = ""
 
     log.info("当前最大回撤：%s", state.max_drawdown)
     log.info("资产最高峰：%s", state.largest_balance)
     log.info("账户总额：%s", state.balance)
 
-    duration = state.reset_position_time()
-    log.info("做多天数：%s", _ms_to_days(duration))
-    log.info("总做多天数: %s", _ms_to_days(state.all_long_position_time))
+    if is_full_close:
+        # 从内存中移除已平仓位
+        state.position.pop(symbol, None)
+        state.price_track.pop(symbol, None)
+        state.position_type = ""
+
+        duration = state.reset_position_time()
+        log.info("做多天数：%s", _ms_to_days(duration))
+        log.info("总做多天数: %s", _ms_to_days(state.all_long_position_time))
+    else:
+        filled_size = _to_decimal(detail["data"].get("baseVolume", size_str))
+        remaining = max(available - filled_size, Decimal("0"))
+        remaining_str = _format_size(remaining)
+        state.position[symbol]["available"] = remaining_str
+        if "total" in state.position[symbol]:
+            state.position[symbol]["total"] = remaining_str
+        log.info("%s 部分平仓后剩余持仓量：%s", symbol, remaining_str)
 
     state.position_balance = state.balance
     return profit
@@ -185,7 +214,7 @@ def order(symbol: str, data: list, order_type: str,
           state: AccountState, only_close: bool = False,
           cut: dict | None = None,
           reason: str = "", bonus: list[str] | None = None,
-          close_reason: str = "") -> None:
+          close_reason: str = "", close_size=None) -> float | None:
     """
     统一下单入口
 
@@ -197,6 +226,7 @@ def order(symbol: str, data: list, order_type: str,
     :param reason:       开仓选币原因
     :param bonus:        开仓加分项列表
     :param close_reason: 平仓原因
+    :param close_size:   SELL 时指定部分平仓数量；不传则全平
     """
     price = float(data[-1][4])
     profit = 0.0
@@ -205,15 +235,20 @@ def order(symbol: str, data: list, order_type: str,
         if order_type == "BUY":
             pos = state.position.get(symbol)
             if pos and pos["holdSide"] == "long":
-                return  # 已持有多仓
+                return 0.0  # 已持有多仓
             if not only_close:
                 open_position(symbol, price, state, reason=reason, bonus=bonus)
         else:  # SELL = 平多
             pos = state.position.get(symbol)
             if pos and pos["holdSide"] == "long":
-                profit = close_position(symbol, state, close_reason=close_reason or "未知")
+                profit = close_position(
+                    symbol, state,
+                    close_reason=close_reason or "未知",
+                    close_size=close_size,
+                )
 
         state.record_profit(profit, order_type)
+        return profit
     except TimeoutError as e:
         log.error("order 超时: %s %s - %s", symbol, order_type, e)
         notify(f"下单超时: {symbol} {order_type} - {e}")
@@ -224,3 +259,4 @@ def order(symbol: str, data: list, order_type: str,
         notify(f"下单网络异常: {symbol} {order_type} - {e}")
     except Exception as e:
         log.error("order 未知异常: %s %s - %s", symbol, order_type, e)
+    return None
